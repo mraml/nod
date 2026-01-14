@@ -1,66 +1,106 @@
-# **Project: FinBot Sentinel (Compliant Example)**
+# AI Project: Shake
 
-## **1\. EU AI Act Compliance**
+## Risk Categorization
+This system is categorized as Low-Risk under Annex III.
 
-### **Risk Categorization**
+## Human Oversight Measures
+A human reviewer will audit 10% of all generated outputs via the admin dashboard.
 
-This system is categorized as **High-Risk** under Annex III (Credit scoring evaluation). It undergoes strict conformity assessments.
+## Technical Documentation
+Full technical documentation is maintained in the `/docs/architecture` repository.
 
-### **Human Oversight Measures**
+## Training Data Sources
+Data is sourced from public Common Crawl datasets (2023 snapshot) and internal verified wikis.
 
-We implement a "Human-in-the-loop" strategy. All loan denials are routed to a loan officer for final review.
+## Bias Mitigation Strategy
+We employ RLHF (Reinforcement Learning from Human Feedback) to reduce toxicity and stereotyping.
 
-### **Technical Documentation**
+## Logging Capabilities
+The system logs all transaction IDs and timestamps to a centralized immutable ledger for traceability.
 
-Full technical documentation (Annex IV) is stored in the `/docs/tech` directory and referenced in the SBOM.
+## Record Keeping
+Logs are retained for 7 years in cold storage to meet regulatory retention periods.
 
-### **Data Governance**
+## Robustness Measures
+The model includes a fallback mechanism to a rule-based engine if confidence scores drop below 80%.
 
-**Training Data Sources:** We use the FICO-2023 sanitized dataset. **Bias Mitigation Strategy:** We apply re-weighting techniques to ensure demographic parity across protected groups.
+## Cybersecurity Measures
+We employ adversarial training during the fine-tuning phase to prevent evasion attacks and poisoning.
 
-## **2\. NIST AI RMF Alignment**
+## Roles and Responsibilities
+The Chief AI Officer owns the model lifecycle; DevOps owns deployment uptime.
 
-### **Map: Context and Goals**
+## Accountability Structure
+Final accountability rests with the VP of Engineering.
 
-The goal is to automate initial credit screening. Context is strictly regulated financial services.
+## Legal Review
+Legal counsel has reviewed the Data Privacy Impact Assessment (DPIA) on Jan 14, 2025.
 
-### **Measure: Bias Metrics**
+## Context and Goals
+The goal is to provide automated customer support. Context is restricted to general inquiries.
 
-We use Disparate Impact Ratio (DIR) and Equal Opportunity Difference (EOD) as our primary fairness metrics.
+## Impact Assessment
+We have conducted a stakeholder analysis and identified low risk of economic harm.
 
-### **Manage: Incident Response Plan**
+## Third-Party Risks
+Vendor dependencies are scanned weekly for CVEs.
 
-If the model drifts beyond 5%, the **Circuit Breaker** protocol is triggered, reverting to the rule-based legacy engine.
+## Bias Metrics
+We measure Disparate Impact Ratio across gender and age groups.
 
-## **3\. OWASP Top 10 Defenses**
+## Fairness Evaluation
+Evaluations show a DIR of 0.98, falling within the acceptable range (>0.80).
 
-### **Input Validation**
+## Validation Results
+Validation on the hold-out set shows 95% accuracy and 99% safety compliance.
 
-All user inputs are sanitized. We use `LLM-Guard` to detect and block **Prompt Injection** attempts.
+## Incident Response Plan
+We follow the corporate IR playbook for AI incidents (Playbook-77).
 
-### **Output Sanitization**
+## Risk Treatment Strategy
+Residual risks are accepted by the business owner after mitigation.
 
-Outputs are parsed to remove potential XSS vectors and ensure JSON strictness.
+## Decommissioning Plan
+A roadmap exists to retire this model in Q4 2026.
 
-### **PII Filtering**
+## Input Validation
+We use a separate BERT model to detect and block prompt injection attempts.
 
-A PII-redaction layer runs on all outputs to prevent data leakage of social security numbers.
+## Output Sanitization
+All output is HTML-escaped and checked for PII patterns before rendering.
 
-## **4\. Security Baseline**
+## Model Theft Protection
+API rate limiting is enforced at 100 req/min to prevent model extraction.
 
-### **Encryption at Rest**
+## Supply Chain Security
+All upstream models are verified against the corporate SBOM and cryptographically signed.
 
-All database volumes and model weights are encrypted using **AES-256**.
+## PII Filtering
+Redaction layers remove SSN and credit card numbers before inference.
 
-### **Encryption in Transit**
+## Encryption at Rest
+All vector embeddings are stored using AES-256 encryption.
 
-All API traffic is secured via **TLS 1.3**.
+## Encryption in Transit
+TLS 1.3 is enforced for all internal and external connections.
 
-### **Authentication Mechanisms**
+## Authentication Mechanisms
+Access is restricted via OAuth2 and MFA (Multi-Factor Authentication).
 
-Access is restricted to service accounts using **OAuth2** flows.
+## Authorization Policy
+RBAC is implemented; only 'Admins' can retrain models.
 
-### **Secrets Management**
+## Secrets Management
+Keys are injected via HashiCorp Vault; no hardcoded secrets exist.
 
-No hardcoded keys. All API keys are injected via HashiCorp Vault at runtime.
+## Audit Logging
+Security-critical events (login, admin actions) are shipped to Splunk.
 
+## Rate Limiting
+API is rate-limited to prevent DoS attacks.
+
+## Data Retention Policy
+User data is deleted after 30 days.
+
+## Energy Consumption
+Estimated carbon footprint is 50kg CO2e per training run.

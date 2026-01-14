@@ -1,0 +1,17 @@
+# **nod Exception File**
+
+# **Add Rule IDs here to document a formal Exception.**
+
+# **These rules will appear as \[EXCEPTION\] in the audit report and SARIF output.**
+
+# **Lines starting with \# are comments.**
+
+# **\--- Example Exceptions \---**
+
+# **Exception ID: ENV-2024-001 \- Documenting exception for Energy Consumption as this is a lightweight model**
+
+# **Energy Consumption**
+
+# **Exception ID: LEG-2024-055 \- Documenting exception for specific legacy controls**
+
+# **Data Retention Policy**

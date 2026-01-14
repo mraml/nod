@@ -1,0 +1,24 @@
+profiles:
+  owasp_llm_top10:
+    badge_label: "OWASP LLM Top 10 Aligned"
+    requirements:
+      - id: "Input Validation|Prompt Injection Defense"
+        tags: ["LLM01", "Security", "Input-Validation"]
+        severity: "CRITICAL"
+        remediation: "LLM01: Define guardrails to prevent prompt injection (e.g., delimiters, parameterization)."
+      - id: "Output Sanitization"
+        tags: ["LLM02", "Security", "Output-Handling"]
+        severity: "HIGH"
+        remediation: "LLM02: Output must be sanitized to prevent XSS or downstream code execution."
+      - id: "Model Theft Protection"
+        tags: ["LLM04", "Security", "Intellectual-Property"]
+        severity: "MEDIUM"
+        remediation: "LLM04: Define measures to prevent model theft (e.g., rate limiting, watermarking)."
+      - id: "Supply Chain Security|Model Provenance"
+        tags: ["LLM05", "Security", "Supply-Chain"]
+        severity: "HIGH"
+        remediation: "LLM05: Verify integrity of third-party models and datasets (e.g., SBOM, signatures)."
+      - id: "PII Filtering|Data Leakage Prevention"
+        tags: ["LLM06", "Privacy", "DLP"]
+        severity: "CRITICAL"
+        remediation: "LLM06: Define mechanisms to detect and filter sensitive information (PII) in output."

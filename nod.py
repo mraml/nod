@@ -179,7 +179,7 @@ class Nod:
                     if val > max_sev: max_sev, max_label = val, c["severity"]
 
         self.attestation = {
-            "tool": "nod", "version": "1.7.0", "policy_version": self.policy_version,
+            "tool": "nod", "version": "1.8.0", "policy_version": self.policy_version,
             "timestamp": datetime.utcnow().isoformat() + "Z", "files_audited": target_files,
             "aggregate_hash": agg_hash, "max_severity_gap": max_label, "results": results,
             "remediation_summary": self._generate_agent_prompt(results),
@@ -262,6 +262,7 @@ class Nod:
         for profile, p_data in self.config.get("profiles", {}).items():
             checks, skipped, added_reqs = [], [], []
             
+            # Conditions
             for cond in p_data.get("conditions", []):
                 if "regex_match" in cond.get("if", {}):
                     try:
@@ -272,6 +273,7 @@ class Nod:
                                 elif isinstance(r, dict): added_reqs.append(r)
                     except re.error: pass
 
+            # Requirements
             for req in p_data.get("requirements", []) + added_reqs:
                 item_id, status, passed, line, source = req["id"], "FAIL", False, 1, default_source
                 remediation = req.get("remediation", "")
@@ -308,6 +310,7 @@ class Nod:
                     "control_id": req.get("control_id"), "source": source, "line": line
                 })
 
+            # Red Flags
             for flag in p_data.get("red_flags", []):
                 item_id, status, passed, line, source = flag["pattern"], "PASS", True, 1, default_source
                 try:
@@ -324,6 +327,26 @@ class Nod:
                     "type": "red_flag", "remediation": flag.get("remediation"), "tags": flag.get("tags", []),
                     "article": flag.get("article"), "control_id": flag.get("control_id"), "source": source, "line": line
                 })
+
+            # Cross-Reference Validation
+            for xref in p_data.get("cross_references", []):
+                src_pat = xref["source"]
+                tgt_tmpl = xref["must_have"]
+                severity = xref.get("severity", "HIGH").upper()
+                try:
+                    for m in re.finditer(src_pat, content, re.IGNORECASE | re.MULTILINE):
+                        expected = m.expand(tgt_tmpl)
+                        passed = expected in content
+                        status = "PASS" if passed else "FAIL"
+                        line = self._get_line_number(content, m.start())
+                        source = self._resolve_source(content, m.start(), default_source)
+                        checks.append({
+                            "id": f"XRef: {m.group(0)} -> {expected}", "passed": passed, "status": status,
+                            "severity": severity, "remediation": f"Found '{m.group(0)}' but missing required '{expected}'",
+                            "tags": ["Integrity", "Traceability"], "source": source, "line": line
+                        })
+                except re.error as e:
+                    print(f"⚠️  Warning: Invalid regex in cross_reference '{src_pat}': {e}", file=sys.stderr)
 
             if strict and ext != ".json" and ("security" in profile or "baseline" in profile):
                 checks.extend(self._verify_local_evidence(content, base_dir, default_source))

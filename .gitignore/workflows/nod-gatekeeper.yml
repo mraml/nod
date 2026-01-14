@@ -1,0 +1,45 @@
+name: AI Compliance Gatekeeper
+on: [pull_request, push]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload SARIF results to the Security tab
+      security-events: write
+      contents: read
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Run nod (Generate SARIF)
+        id: nod_sarif
+        # Run in non-blocking mode first to generate the report
+        run: |
+          python nod.py ai-spec.md --rules rules.yaml --output sarif > nod-results.sarif || true
+
+      - name: Upload SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: nod-results.sarif
+
+      - name: Gatekeeper Check
+        id: nod_gate
+        # Now fail the build if criteria aren't met
+        run: |
+          python nod.py ai-spec.md --rules rules.yaml --strict --min-severity HIGH
+
+      - name: Upload Attestation Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nod-attestation
+          path: nod-attestation.json

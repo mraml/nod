@@ -290,7 +290,22 @@ class Nod:
                     if ext == ".json":
                         try:
                             data = json.loads(content)
-                            if item_id in data and (not strict or str(data[item_id]).strip()): passed = True; status = "PASS"
+                            if item_id in data:
+                                val_str = str(data[item_id])
+                                if strict and not val_str.strip():
+                                    passed = False; status = "FAIL"
+                                else:
+                                    passed = True; status = "PASS"
+                                    # Field Pattern Validation for JSON
+                                    for pattern_def in req.get("must_match", []):
+                                        pattern = pattern_def.get("pattern")
+                                        if not pattern: continue
+                                        try:
+                                            if not re.search(pattern, val_str, re.IGNORECASE | re.MULTILINE):
+                                                passed = False; status = "FAIL"
+                                                msg = pattern_def.get("message", f"Value must match: {pattern}")
+                                                remediation = f"{msg}. " + remediation
+                                        except re.error: pass
                         except: pass
                     else:
                         try:
@@ -324,6 +339,18 @@ class Nod:
                                 if missing:
                                     passed = False; status = "FAIL"
                                     remediation = f"Missing subsections: {', '.join(missing)}. " + remediation
+
+                                # Field Pattern Validation (must_match)
+                                for pattern_def in req.get("must_match", []):
+                                    pattern = pattern_def.get("pattern")
+                                    if not pattern: continue
+                                    try:
+                                        if not re.search(pattern, section, re.IGNORECASE | re.MULTILINE):
+                                            passed = False; status = "FAIL"
+                                            msg = pattern_def.get("message", f"Must match pattern: {pattern}")
+                                            remediation = f"{msg}. " + remediation
+                                    except re.error as e:
+                                        print(f"⚠️  Warning: Invalid regex in must_match '{pattern}': {e}", file=sys.stderr)
 
                         except re.error: status = "FAIL"
 

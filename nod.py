@@ -260,16 +260,19 @@ class Nod:
     def _audit_logic(self, content: str, ext: str, strict: bool, base_dir: str, default_source: str = None, file_map: Dict[str, str] = None) -> Dict[str, Any]:
         report = {}
         for profile, p_data in self.config.get("profiles", {}).items():
-            checks, skipped = [], []
+            checks, skipped, added_reqs = [], [], []
             
             for cond in p_data.get("conditions", []):
                 if "regex_match" in cond.get("if", {}):
                     try:
                         if re.search(cond["if"]["regex_match"], content, re.IGNORECASE | re.MULTILINE):
                             skipped.extend(cond.get("then", {}).get("skip", []))
+                            for r in cond.get("then", {}).get("require", []):
+                                if isinstance(r, str): added_reqs.append({"id": r, "severity": "HIGH", "remediation": f"Triggered by condition: {cond['if']['regex_match']}"})
+                                elif isinstance(r, dict): added_reqs.append(r)
                     except re.error: pass
 
-            for req in p_data.get("requirements", []):
+            for req in p_data.get("requirements", []) + added_reqs:
                 item_id, status, passed, line, source = req["id"], "FAIL", False, 1, default_source
                 remediation = req.get("remediation", "")
                 mode = req.get("mode", "at_least_one")

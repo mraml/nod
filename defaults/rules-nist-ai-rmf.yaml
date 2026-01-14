@@ -1,0 +1,61 @@
+profiles:
+  nist_ai_rmf:
+    badge_label: "NIST AI RMF Aligned"
+    requirements:
+      - id: "Roles and Responsibilities"
+        tags: ["GOVERN", "GOVERN-1.2", "Accountability"]
+        severity: "MEDIUM"
+        remediation: "GOVERN 1.2: Define specific roles for the AI lifecycle."
+      - id: "Accountability Structure"
+        tags: ["GOVERN", "GOVERN-1.2", "Accountability"]
+        severity: "MEDIUM"
+        remediation: "GOVERN 1.2: Define accountability chains for system outcomes."
+      - id: "Legal Review"
+        tags: ["GOVERN", "GOVERN-1.3", "Compliance"]
+        severity: "MEDIUM"
+        remediation: "GOVERN 1.3: Evidence of legal/regulatory review processes."
+      - id: "Context and Goals"
+        tags: ["MAP", "MAP-1.1", "Context"]
+        severity: "HIGH"
+        remediation: "MAP 1.1: Document the context and business goals of the system."
+      - id: "Impact Assessment"
+        tags: ["MAP", "MAP-1.1", "Impact"]
+        severity: "HIGH"
+        remediation: "MAP 1.1: Analyze potential negative impacts on stakeholders."
+      - id: "Third-Party Risks"
+        tags: ["MAP", "MAP-1.3", "Supply-Chain"]
+        severity: "MEDIUM"
+        remediation: "MAP 1.3: Identify risks related to third-party software or data."
+      - id: "Bias Metrics"
+        tags: ["MEASURE", "MEASURE-2.2", "Fairness"]
+        severity: "HIGH"
+        remediation: "MEASURE 2.2: Define specific metrics used to quantify bias."
+      - id: "Fairness Evaluation"
+        tags: ["MEASURE", "MEASURE-2.2", "Evaluation"]
+        severity: "HIGH"
+        remediation: "MEASURE 2.2: Describe how fairness is evaluated against the defined metrics."
+      - id: "Validation Results"
+        tags: ["MEASURE", "MEASURE-2.6", "Validation"]
+        severity: "HIGH"
+        remediation: "MEASURE 2.6: Include summary results from system validation/verification."
+      - id: "Incident Response Plan"
+        tags: ["MANAGE", "MANAGE-2.3", "Incident-Response"]
+        severity: "HIGH"
+        remediation: "MANAGE 2.3: Detail specific steps to respond to AI incidents."
+      - id: "Risk Treatment Strategy"
+        tags: ["MANAGE", "MANAGE-2.3", "Risk-Treatment"]
+        severity: "HIGH"
+        remediation: "MANAGE 2.3: Define strategy (avoid, accept, transfer, mitigate) for identified risks."
+      - id: "Decommissioning Plan"
+        tags: ["MANAGE", "MANAGE-1.3", "Lifecycle"]
+        severity: "LOW"
+        remediation: "MANAGE 1.3: Plan for system decommissioning or model retirement."
+    red_flags:
+      - pattern: "black box"
+        tags: ["MEASURE", "Explainability", "TEV"]
+        severity: "MEDIUM"
+        remediation: "NIST RMF emphasizes Explainability. Avoid 'black box' architectures without interpretability layers."
+      - pattern: "no evaluation planned"
+        tags: ["MEASURE", "Validation", "TEV"]
+        severity: "CRITICAL"
+        remediation: "Continuous validation is core to the NIST RMF Measure function."

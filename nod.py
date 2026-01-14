@@ -32,27 +32,30 @@ class Nod:
         "INFO": 0,
     }
 
-    def __init__(self, rules_source: str) -> None:
+    SARIF_LEVEL_MAP: Dict[str, str] = {
+        "CRITICAL": "error",
+        "HIGH": "error",
+        "MEDIUM": "warning",
+        "LOW": "note",
+        "INFO": "note",
+    }
+
+    def __init__(self, rules_source: str, ignore_path: str = ".nodignore") -> None:
         """
-        Initialize the scanner with rules from a local path or remote URL.
+        Initialize the scanner with rules and ignore definitions.
 
         Args:
-            rules_source: Path to a local YAML file or a URL starting with http/https.
+            rules_source: Path to a local YAML file or a URL.
+            ignore_path: Path to the .nodignore file.
         """
         self.rules_source = rules_source
         self.config = self._load_rules(source=rules_source)
+        self.policy_version = self.config.get("version", "unknown")
+        self.ignored_rules = self._load_ignore_file(ignore_path)
         self.attestation: Dict[str, Any] = {}
 
     def _load_rules(self, source: str) -> Dict[str, Any]:
-        """
-        Loads rules from a local file or remote URL.
-
-        Args:
-            source: The file path or URL string.
-
-        Returns:
-            A dictionary containing the parsed YAML configuration.
-        """
+        """Loads rules from a local file or remote URL."""
         try:
             if source.startswith(("http://", "https://")):
                 with urllib.request.urlopen(source) as response:
@@ -63,21 +66,28 @@ class Nod:
             print(f"Error loading rules from {source}: {str(e)}")
             sys.exit(1)
 
+    def _load_ignore_file(self, path: str) -> List[str]:
+        """Loads a list of ignored rule IDs from a .nodignore file."""
+        ignored = []
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            ignored.append(line)
+            except Exception as e:
+                print(f"Warning: Could not read ignore file {path}: {e}")
+        return ignored
+
+    def _get_line_number(self, content: str, index: int) -> int:
+        """Calculates line number from character index."""
+        return content.count("\n", 0, index) + 1
+
     def scan_file(
         self, file_path: str, strict: bool = False
     ) -> Tuple[Dict[str, Any], str]:
-        """
-        Scans a file against the loaded compliance rules.
-
-        Args:
-            file_path: Path to the specification file (.md or .json).
-            strict: If True, checks that required sections have content.
-
-        Returns:
-            A tuple containing:
-            - results: Dictionary of audit results per profile.
-            - max_sev_label: The highest severity gap found (e.g., "CRITICAL").
-        """
+        """Scans a file against the loaded compliance rules."""
         if not os.path.exists(file_path):
             return {"error": f"File not found: {file_path}"}, "NONE"
 
@@ -96,19 +106,22 @@ class Nod:
         # Determine Maximum Severity for Gatekeeping
         max_sev_value = -1
         max_sev_label = "NONE"
+        
         for p in results.values():
             if "checks" in p:
                 for c in p["checks"]:
-                    if not c["passed"]:
+                    # Do not fail build if excepted or skipped
+                    if not c["passed"] and c["status"] == "FAIL":
                         val = self.SEVERITY_MAP.get(c["severity"], 0)
                         if val > max_sev_value:
                             max_sev_value = val
                             max_sev_label = c["severity"]
 
-        # Attestation Artifact: Structured for Downstream Agents
+        # Attestation Artifact
         self.attestation = {
             "tool": "nod",
-            "version": "1.2.0",
+            "tool_version": "1.3.0",
+            "policy_version": self.policy_version,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "file_audited": file_path,
             "file_sha256": file_hash,
@@ -122,68 +135,114 @@ class Nod:
     def _audit_logic(
         self, content: str, ext: str, strict: bool
     ) -> Dict[str, Any]:
-        """Core logic for checking JSON keys or Markdown patterns."""
+        """Core logic handling conditions, exceptions, and checks."""
         report = {}
         profiles = self.config.get("profiles", {})
 
         for profile, profile_data in profiles.items():
             checks = []
+            
+            # 0. Check Conditional Logic (If satisfied, populate skip list)
+            skipped_rules = []
+            conditions = profile_data.get("conditions", [])
+            for cond in conditions:
+                if "if" in cond and "regex_match" in cond["if"]:
+                    pattern = cond["if"]["regex_match"]
+                    if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
+                        if "then" in cond and "skip" in cond["then"]:
+                            skipped_rules.extend(cond["then"]["skip"])
 
             # 1. Requirements Scanning
             for req in profile_data.get("requirements", []):
                 item_id = req["id"]
                 sev = req.get("severity", "HIGH").upper()
+                line_num = 1
+                
+                # Default status
+                status = "FAIL"
                 passed = False
 
-                if ext == ".json":
-                    try:
-                        data = json.loads(content)
-                        # Check existence and non-empty if strict
-                        if item_id in data:
-                            passed = True
-                            if strict and not str(data[item_id]).strip():
-                                passed = False
-                    except json.JSONDecodeError:
-                        pass
+                # Check if ignored via .nodignore or conditional skip
+                is_exception = item_id in self.ignored_rules
+                is_skipped = item_id in skipped_rules
+
+                if is_skipped:
+                    status = "SKIPPED"
+                    passed = True # Treated as pass for gatekeeping
+                elif is_exception:
+                    status = "EXCEPTION"
+                    passed = True # Treated as pass for gatekeeping
                 else:
-                    # Markdown/Text regex check
-                    match = re.search(item_id, content, re.IGNORECASE | re.MULTILINE)
-                    if match:
-                        passed = True
-                        if strict:
-                            # Verify meaningful content exists after the header
-                            # Grab text from end of match until next header or EOF
-                            start_index = match.end()
-                            following_text = content[start_index:].split("#")[0].strip()
-                            passed = len(following_text) > 15  # Min char count threshold
+                    if ext == ".json":
+                        try:
+                            data = json.loads(content)
+                            if item_id in data:
+                                passed = True
+                                status = "PASS"
+                                if strict and not str(data[item_id]).strip():
+                                    passed = False
+                                    status = "FAIL"
+                        except json.JSONDecodeError:
+                            pass
+                    else:
+                        match = re.search(item_id, content, re.IGNORECASE | re.MULTILINE)
+                        if match:
+                            passed = True
+                            status = "PASS"
+                            line_num = self._get_line_number(content, match.start())
+                            if strict:
+                                start_index = match.end()
+                                following_text = content[start_index:].split("#")[0].strip()
+                                if len(following_text) <= 15:
+                                    passed = False
+                                    status = "FAIL"
 
                 checks.append({
                     "id": item_id,
                     "passed": passed,
+                    "status": status,
                     "severity": sev,
+                    "tags": req.get("tags", []),
                     "remediation": req.get("remediation"),
                     "template_url": req.get("template_url"),
+                    "line": line_num
                 })
 
-            # 2. Red-Flag Scanning (Anti-patterns)
+            # 2. Red-Flag Scanning
             for flag in profile_data.get("red_flags", []):
                 item_id = flag["pattern"]
                 sev = flag.get("severity", "CRITICAL").upper()
                 found = re.search(item_id, content, re.IGNORECASE | re.MULTILINE)
+                line_num = 1
+                
+                status = "PASS"
+                passed = True
+
+                if found:
+                    line_num = self._get_line_number(content, found.start())
+                    if item_id in self.ignored_rules:
+                        status = "EXCEPTION"
+                    elif item_id in skipped_rules:
+                        status = "SKIPPED"
+                    else:
+                        status = "FAIL"
+                        passed = False
 
                 checks.append({
                     "id": item_id,
-                    "passed": not bool(found),
+                    "passed": passed,
+                    "status": status,
                     "severity": sev,
                     "type": "red_flag",
+                    "tags": flag.get("tags", ["Security", "Prohibited"]),
                     "remediation": flag.get("remediation"),
+                    "line": line_num
                 })
 
-            # Determine profile pass/fail status
-            # Only count severity >= HIGH (value 3) as blocking for the profile status
+            # Determine profile status
             blocking_failures = [
                 c for c in checks
-                if not c["passed"] and self.SEVERITY_MAP.get(c["severity"], 0) >= 3
+                if c["status"] == "FAIL" and self.SEVERITY_MAP.get(c["severity"], 0) >= 3
             ]
 
             report[profile] = {
@@ -199,11 +258,88 @@ class Nod:
         for p in results.values():
             if "checks" in p:
                 for c in p["checks"]:
-                    if not c["passed"]:
+                    if c["status"] == "FAIL":
+                        tags_str = f"[{', '.join(c.get('tags', []))}]" if c.get('tags') else ""
                         gaps.append(
-                            f"- [{c['severity']}] {c['id']}: {c.get('remediation', '')}"
+                            f"- [{c['severity']}] {c['id']} {tags_str}: {c.get('remediation', '')}"
                         )
         return "\n".join(gaps) if gaps else "No gaps detected."
+
+    def generate_sarif(self, file_path: str) -> Dict[str, Any]:
+        """Generates a SARIF report from the attestation data."""
+        rules = []
+        results = []
+        rule_indices = {}
+
+        for profile_name, profile_data in self.attestation["results"].items():
+            for check in profile_data["checks"]:
+                # Only report failures in SARIF results, or exceptions as suppressed.
+                
+                rule_id = check["id"]
+                if rule_id not in rule_indices:
+                    rule_indices[rule_id] = len(rules)
+                    sarif_rule = {
+                        "id": rule_id,
+                        "name": rule_id,
+                        "shortDescription": {"text": check.get("remediation", rule_id)},
+                        "properties": {
+                            "severity": check["severity"],
+                            "tags": check.get("tags", [])
+                        }
+                    }
+                    if check.get("template_url"):
+                        sarif_rule["helpUri"] = check["template_url"]
+                    rules.append(sarif_rule)
+
+                if check["status"] == "FAIL":
+                    level = self.SARIF_LEVEL_MAP.get(check["severity"], "warning")
+                    result = {
+                        "ruleId": rule_id,
+                        "ruleIndex": rule_indices[rule_id],
+                        "level": level,
+                        "message": {
+                            "text": f"Compliance Gap: {check.get('remediation', 'Missing requirement')}"
+                        },
+                        "locations": [{
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": file_path},
+                                "region": {"startLine": check.get("line", 1)}
+                            }
+                        }]
+                    }
+                    results.append(result)
+                elif check["status"] == "EXCEPTION":
+                    # SARIF suppression
+                    result = {
+                        "ruleId": rule_id,
+                        "ruleIndex": rule_indices[rule_id],
+                        "level": "note",
+                        "kind": "review",
+                        "suppressions": [{"kind": "external"}],
+                        "message": {"text": "Exception granted via .nodignore"},
+                        "locations": [{
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": file_path},
+                                "region": {"startLine": check.get("line", 1)}
+                            }
+                        }]
+                    }
+                    results.append(result)
+
+        return {
+            "version": "2.1.0",
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "runs": [{
+                "tool": {
+                    "driver": {
+                        "name": "nod",
+                        "version": self.attestation.get("tool_version", "1.3.0"),
+                        "rules": rules
+                    }
+                },
+                "results": results
+            }]
+        }
 
 
 def main() -> None:
@@ -230,7 +366,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        choices=["text", "json"],
+        choices=["text", "json", "sarif"],
         default="text",
         help="Output format",
     )
@@ -239,16 +375,25 @@ def main() -> None:
     scanner = Nod(args.rules)
     results, max_sev = scanner.scan_file(args.file, strict=args.strict)
 
-    # JSON Output Handling
+    # SARIF Output
+    if args.output == "sarif":
+        sarif_data = scanner.generate_sarif(args.file)
+        print(json.dumps(sarif_data, indent=2))
+        max_sev_val = scanner.SEVERITY_MAP.get(max_sev, 0)
+        threshold_val = scanner.SEVERITY_MAP.get(args.min_severity)
+        sys.exit(0 if max_sev_val < threshold_val else 1)
+
+    # JSON Output
     if args.output == "json":
         print(json.dumps(scanner.attestation, indent=2))
         max_sev_val = scanner.SEVERITY_MAP.get(max_sev, 0)
         threshold_val = scanner.SEVERITY_MAP.get(args.min_severity)
         sys.exit(0 if max_sev_val < threshold_val else 1)
 
-    # Text Output Handling
+    # Text Output
     print(f"\n--- nod Audit Summary ---")
     print(f"File: {args.file}")
+    print(f"Policy Version: {scanner.policy_version}")
     print(f"Max Severity Gap: {max_sev}")
     print(f"--------------------------")
 
@@ -262,24 +407,31 @@ def main() -> None:
     for profile, data in results.items():
         print(f"\n[{data['label']}]")
         for check in data["checks"]:
-            if not check["passed"]:
+            if check["status"] == "FAIL":
                 icon = "🚩" if check.get("type") == "red_flag" else "❌"
                 print(f"  {icon} [{check['severity']}] {check['id']}")
+                if check.get("tags"):
+                    print(f"     Tags: {', '.join(check['tags'])}")
                 print(f"     Remediation: {check.get('remediation', 'None')}")
-                if check.get("template_url"):
-                    print(f"     Template: {check['template_url']}")
-
+                
                 if scanner.SEVERITY_MAP.get(check["severity"], 0) >= min_val:
                     failed_gate = True
+            elif check["status"] == "EXCEPTION":
+                print(f"  ⚪ [EXCEPTION] {check['id']} (via .nodignore)")
+            elif check["status"] == "SKIPPED":
+                print(f"  ⏭️  [SKIPPED] {check['id']} (Condition met)")
             else:
-                print(f"  ✅ [PASS] {check['id']}")
+                pass_tags = f" ({', '.join(check['tags'])})" if check.get("tags") else ""
+                print(f"  ✅ [PASS] {check['id']}{pass_tags}")
 
-    # Save attestation regardless of pass/fail for the audit trail
+    # Save attestation
     try:
         with open("nod-attestation.json", "w", encoding="utf-8") as f:
             json.dump(scanner.attestation, f, indent=2)
     except IOError as e:
         print(f"Warning: Could not save attestation artifact: {e}")
+
+    # TODO: Implement Reference Checking (Phase 4)
 
     if failed_gate:
         print(f"\nFAIL: Build blocked due to {args.min_severity}+ severity gaps.")

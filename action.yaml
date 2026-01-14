@@ -1,0 +1,48 @@
+name: 'nod AI Compliance Gatekeeper'
+description: 'Enforce EU AI Act, NIST, and OWASP compliance in Markdown/JSON specs.'
+author: 'Your Name'
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  target:
+    description: 'Path to the spec file to audit (e.g., ai-spec.md)'
+    required: true
+  rules:
+    description: 'Path or URL to rules.yaml'
+    required: false
+    default: 'rules.yaml'
+  strict:
+    description: 'Enable strict mode (checks content length)'
+    required: false
+    default: 'true'
+  min_severity:
+    description: 'Minimum severity to fail the build (MEDIUM, HIGH, CRITICAL)'
+    required: false
+    default: 'HIGH'
+  output_format:
+    description: 'Output format (text, json, sarif)'
+    required: false
+    default: 'text'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: pip install pyyaml
+      shell: bash
+
+    - name: Run nod
+      run: |
+        python ${{ github.action_path }}/nod.py ${{ inputs.target }} \
+          --rules ${{ inputs.rules }} \
+          --min-severity ${{ inputs.min_severity }} \
+          --output ${{ inputs.output_format }} \
+          ${{ inputs.strict == 'true' && '--strict' || '' }}
+      shell: bash

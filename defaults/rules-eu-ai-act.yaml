@@ -1,0 +1,65 @@
+profiles:
+  eu_ai_act:
+    badge_label: "EU AI Act Aligned"
+    conditions:
+      - if:
+          regex_match: "Risk Categorization.*(Low|Minimal|No Risk)"
+        then:
+          skip: 
+            - "Human Oversight Measures"
+            - "Robustness Measures"
+            - "Cybersecurity Measures"
+    requirements:
+      - id: "#+.*Risk Categorization"
+        tags: ["Article-6", "Annex-III", "Classification"]
+        severity: "CRITICAL"
+        remediation: "Mandatory: Categorize the system according to EU AI Act Annex III (High-Risk/Prohibited)."
+      - id: "Training Data Sources"
+        tags: ["Article-10", "Data-Governance"]
+        severity: "HIGH"
+        remediation: "Article 10: Explicitly describe training, validation, and testing data sources."
+      - id: "Bias Mitigation Strategy"
+        tags: ["Article-10", "Bias", "Fairness"]
+        severity: "HIGH"
+        remediation: "Article 10: Detail strategies used to detect and mitigate bias in datasets."
+      - id: "Technical Documentation"
+        tags: ["Article-11", "Annex-IV", "Documentation"]
+        severity: "HIGH"
+        remediation: "Article 11: Ensure technical documentation (Annex IV) is referenced or included."
+      - id: "Logging Capabilities"
+        tags: ["Article-12", "Record-Keeping", "Traceability"]
+        severity: "MEDIUM"
+        remediation: "Article 12: System must generate logs enabling traceability of functioning."
+      - id: "Record Keeping"
+        tags: ["Article-12", "Retention"]
+        severity: "MEDIUM"
+        remediation: "Article 12: Define retention periods and storage for system logs."
+      - id: "Human Oversight Measures"
+        tags: ["Article-14", "Human-Oversight", "HITL"]
+        severity: "HIGH"
+        remediation: "Article 14: Describe measures for human oversight (human-in-the-loop, human-on-the-loop)."
+      - id: "Robustness Measures"
+        tags: ["Article-15", "Robustness", "Resilience"]
+        severity: "HIGH"
+        remediation: "Article 15: Specify resilience against errors, faults, and unexpected situations."
+      - id: "Cybersecurity Measures"
+        tags: ["Article-15", "Cybersecurity", "Adversarial"]
+        severity: "HIGH"
+        remediation: "Article 15: Detail protection against adversarial attacks (poisoning, evasion)."
+    red_flags:
+      - pattern: "real-time biometric identification"
+        tags: ["Article-5", "Prohibited"]
+        severity: "CRITICAL"
+        remediation: "Prohibited (Art 5): Remote biometric ID in public spaces is banned."
+      - pattern: "social scoring"
+        tags: ["Article-5", "Prohibited"]
+        severity: "CRITICAL"
+        remediation: "Prohibited (Art 5): AI systems cannot be used for social scoring."
+      - pattern: "subliminal techniques"
+        tags: ["Article-5", "Prohibited"]
+        severity: "CRITICAL"
+        remediation: "Prohibited (Art 5): Techniques deploying subliminal messaging are banned."
+      - pattern: "emotion recognition.*workplace"
+        tags: ["Article-5", "Prohibited"]
+        severity: "CRITICAL"
+        remediation: "Prohibited (Art 5): Emotion recognition in workplace/education is banned."

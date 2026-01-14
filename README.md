@@ -2,6 +2,9 @@
 
 **nod** is a platform-agnostic, rule-based linter that ensures AI/LLM specifications contain critical security and compliance elements **before** any agentic or automated development begins.
 
+![Nod Gatekeeper](https://github.com/mraml/nod/actions/workflows/nod-gatekeeper.yml/badge.svg)
+
+
 ## **🚀 The Core Philosophy: "The Final Nod"**
 
 Automated agents and agentic workflows (like Ralph, AutoGPT, or custom CI/CD builders) are powerful but "compliance-blind." They build exactly what is in the specification.

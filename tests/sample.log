@@ -1,0 +1,101 @@
+Run python nod.py ai-spec.md --rules rules.yaml --strict --min-severity HIGH
+
+--- nod Audit Summary ---
+File: ai-spec.md
+Policy Version: 1.1.0
+Max Severity Gap: HIGH
+--------------------------
+
+[EU AI Act Aligned]
+  ✅ [PASS] #+.*Risk Categorization (Article-6, Annex-III, Classification)
+  ✅ [PASS] Training Data Sources (Article-10, Data-Governance)
+  ✅ [PASS] Bias Mitigation Strategy (Article-10, Bias, Fairness)
+  ✅ [PASS] Technical Documentation (Article-11, Annex-IV, Documentation)
+  ❌ [MEDIUM] Logging Capabilities
+     Tags: Article-12, Record-Keeping, Traceability
+     Remediation: Article 12: System must generate logs enabling traceability of functioning.
+  ❌ [MEDIUM] Record Keeping
+     Tags: Article-12, Retention
+     Remediation: Article 12: Define retention periods and storage for system logs.
+  ✅ [PASS] Human Oversight Measures (Article-14, Human-Oversight, HITL)
+  ❌ [HIGH] Robustness Measures
+     Tags: Article-15, Robustness, Resilience
+     Remediation: Article 15: Specify resilience against errors, faults, and unexpected situations.
+  ❌ [HIGH] Cybersecurity Measures
+     Tags: Article-15, Cybersecurity, Adversarial
+     Remediation: Article 15: Detail protection against adversarial attacks (poisoning, evasion).
+  ✅ [PASS] real-time biometric identification (Article-5, Prohibited)
+  ✅ [PASS] social scoring (Article-5, Prohibited)
+  ✅ [PASS] subliminal techniques (Article-5, Prohibited)
+  ✅ [PASS] emotion recognition.*workplace (Article-5, Prohibited)
+
+[NIST AI RMF Aligned]
+  ❌ [MEDIUM] Roles and Responsibilities
+     Tags: GOVERN, GOVERN-1.2, Accountability
+     Remediation: GOVERN 1.2: Define specific roles for the AI lifecycle.
+  ❌ [MEDIUM] Accountability Structure
+     Tags: GOVERN, GOVERN-1.2, Accountability
+     Remediation: GOVERN 1.2: Define accountability chains for system outcomes.
+  ❌ [MEDIUM] Legal Review
+     Tags: GOVERN, GOVERN-1.3, Compliance
+     Remediation: GOVERN 1.3: Evidence of legal/regulatory review processes.
+  ✅ [PASS] Context and Goals (MAP, MAP-1.1, Context)
+  ❌ [HIGH] Impact Assessment
+     Tags: MAP, MAP-1.1, Impact
+     Remediation: MAP 1.1: Analyze potential negative impacts on stakeholders.
+  ❌ [MEDIUM] Third-Party Risks
+     Tags: MAP, MAP-1.3, Supply-Chain
+     Remediation: MAP 1.3: Identify risks related to third-party software or data.
+  ✅ [PASS] Bias Metrics (MEASURE, MEASURE-2.2, Fairness)
+  ❌ [HIGH] Fairness Evaluation
+     Tags: MEASURE, MEASURE-2.2, Evaluation
+     Remediation: MEASURE 2.2: Describe how fairness is evaluated against the defined metrics.
+  ❌ [HIGH] Validation Results
+     Tags: MEASURE, MEASURE-2.6, Validation
+     Remediation: MEASURE 2.6: Include summary results from system validation/verification.
+  ✅ [PASS] Incident Response Plan (MANAGE, MANAGE-2.3, Incident-Response)
+  ❌ [HIGH] Risk Treatment Strategy
+     Tags: MANAGE, MANAGE-2.3, Risk-Treatment
+     Remediation: MANAGE 2.3: Define strategy (avoid, accept, transfer, mitigate) for identified risks.
+  ❌ [LOW] Decommissioning Plan
+     Tags: MANAGE, MANAGE-1.3, Lifecycle
+     Remediation: MANAGE 1.3: Plan for system decommissioning or model retirement.
+  ✅ [PASS] black box (MEASURE, Explainability, TEV)
+  ✅ [PASS] no evaluation planned (MEASURE, Validation, TEV)
+
+[OWASP LLM Top 10 Aligned]
+  ✅ [PASS] Input Validation|Prompt Injection Defense (LLM01, Security, Input-Validation)
+  ✅ [PASS] Output Sanitization (LLM02, Security, Output-Handling)
+  ❌ [MEDIUM] Model Theft Protection
+     Tags: LLM04, Security, Intellectual-Property
+     Remediation: LLM04: Define measures to prevent model theft (e.g., rate limiting, watermarking).
+  ❌ [HIGH] Supply Chain Security|Model Provenance
+     Tags: LLM05, Security, Supply-Chain
+     Remediation: LLM05: Verify integrity of third-party models and datasets (e.g., SBOM, signatures).
+  ✅ [PASS] PII Filtering|Data Leakage Prevention (LLM06, Privacy, DLP)
+
+[Security Hardened]
+  ❌ [MEDIUM] Data Retention Policy
+     Tags: Privacy, Data-Protection
+     Remediation: Define how long training inputs and inference outputs are stored.
+  ✅ [PASS] Encryption at Rest (Security, Encryption, Storage)
+  ✅ [PASS] Encryption in Transit (Security, Encryption, Network)
+  ✅ [PASS] Authentication Mechanisms (Security, AuthN, IAM)
+  ❌ [HIGH] Authorization Policy
+     Tags: Security, AuthZ, IAM
+     Remediation: Define permission models (e.g., RBAC, Least Privilege).
+  ✅ [PASS] Secrets Management (Security, Secrets)
+  ❌ [HIGH] Audit Logging
+     Tags: Security, Logging
+     Remediation: Ensure security-critical events (login failures, sensitive access) are logged centrally.
+  ❌ [MEDIUM] Rate Limiting
+     Tags: Security, Availability
+     Remediation: Define rate limits to prevent DoS attacks.
+  ❌ [LOW] Energy Consumption
+     Tags: Sustainability, Green-AI
+     Remediation: Sustainability: Estimate energy consumption of training/inference.
+  ✅ [PASS] disable auth (Security, Anti-Pattern)
+  ✅ [PASS] hardcoded credential (Security, Anti-Pattern)
+
+FAIL: Build blocked due to HIGH+ severity gaps.
+Error: Process completed with exit code 1.

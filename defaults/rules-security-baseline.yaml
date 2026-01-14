@@ -1,0 +1,49 @@
+profiles:
+  security_baseline:
+    badge_label: "Security Hardened"
+    requirements:
+      - id: "Data Retention Policy"
+        tags: ["Privacy", "Data-Protection"]
+        severity: "MEDIUM"
+        remediation: "Define how long training inputs and inference outputs are stored."
+      - id: "Encryption at Rest"
+        tags: ["Security", "Encryption", "Storage"]
+        severity: "HIGH"
+        remediation: "Must explicitly state encryption protocols for stored data (e.g., AES-256)."
+      - id: "Encryption in Transit"
+        tags: ["Security", "Encryption", "Network"]
+        severity: "HIGH"
+        remediation: "Must explicitly state encryption protocols for data in motion (e.g., TLS 1.3)."
+      - id: "Authentication Mechanisms"
+        tags: ["Security", "AuthN", "IAM"]
+        severity: "HIGH"
+        remediation: "Define how users/systems are authenticated (e.g., MFA, SSO)."
+      - id: "Authorization Policy"
+        tags: ["Security", "AuthZ", "IAM"]
+        severity: "HIGH"
+        remediation: "Define permission models (e.g., RBAC, Least Privilege)."
+      - id: "Secrets Management"
+        tags: ["Security", "Secrets"]
+        severity: "CRITICAL"
+        remediation: "Define how secrets (API keys) are managed, ensuring they are not hardcoded."
+      - id: "Audit Logging"
+        tags: ["Security", "Logging"]
+        severity: "HIGH"
+        remediation: "Ensure security-critical events (login failures, sensitive access) are logged centrally."
+      - id: "Rate Limiting"
+        tags: ["Security", "Availability"]
+        severity: "MEDIUM"
+        remediation: "Define rate limits to prevent DoS attacks."
+      - id: "Energy Consumption"
+        tags: ["Sustainability", "Green-AI"]
+        severity: "LOW"
+        remediation: "Sustainability: Estimate energy consumption of training/inference."
+    red_flags:
+      - pattern: "disable auth"
+        tags: ["Security", "Anti-Pattern"]
+        severity: "CRITICAL"
+        remediation: "Security Anti-Pattern: Do not disable authentication mechanisms in spec."
+      - pattern: "hardcoded credential"
+        tags: ["Security", "Anti-Pattern"]
+        severity: "CRITICAL"
+        remediation: "Security Anti-Pattern: Never reference hardcoded secrets or keys."

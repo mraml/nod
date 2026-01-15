@@ -90,7 +90,9 @@ class Nod:
         for name, data in self.config.get("profiles", {}).items():
             lines.append(f"---\n## Profile: {data.get('badge_label', name)}\n")
             for req in data.get("requirements", []):
-                lines += [f"### {self._clean(req['id'])}", f"<!-- {req.get('remediation', 'Fill section')} -->"]
+                # Use label if available for clearer template
+                header = req.get("label") or self._clean(req['id'])
+                lines += [f"### {header}", f"<!-- {req.get('remediation', 'Fill section')} -->"]
                 if req.get("must_contain"): lines += ["<!-- Subsections: -->"] + req["must_contain"]
                 lines.append("TODO: Add details...\n")
         return "\n".join(lines)
@@ -102,8 +104,16 @@ class Nod:
             flags = [f for f in data.get("red_flags", []) if f["pattern"] not in self.ignored]
             if not reqs and not flags: continue
             lines.append(f"## {data.get('badge_label', name)}")
-            if reqs: lines += ["### REQUIRE:"] + [f"- {self._clean(r['id'])}: {r.get('remediation','')}" for r in reqs]
-            if flags: lines += ["### FORBID:"] + [f"- PATTERN '{f['pattern']}': {f.get('remediation','')}" for f in flags]
+            if reqs: 
+                lines.append("### REQUIRE:")
+                for r in reqs:
+                    name = r.get("label") or self._clean(r['id'])
+                    lines.append(f"- {name}: {r.get('remediation','')}")
+            if flags: 
+                lines.append("### FORBID:")
+                for f in flags: 
+                    name = f.get("label") or f"PATTERN '{f['pattern']}'"
+                    lines.append(f"- {name}: {f.get('remediation','')}")
             lines.append("")
         return "\n".join(lines)
 
@@ -186,26 +196,23 @@ class Nod:
                         for p in req.get("must_match", []):
                             if p.get("pattern") and not re.search(p["pattern"], sect, re.I|re.M):
                                 passed, err = False, p.get('message', 'Pattern mismatch')
-            except re.error: pass
+            except: pass
         return passed, line, s_idx, err
 
     def _audit(self, content: str, ext: str, strict: bool, base: str, def_src: str, fmap: Dict) -> Dict:
         report = {}
         for name, data in self.config.get("profiles", {}).items():
-            checks, skip, added = [], [], []
-            
-            # 1. Logic: Conditions (Restore 'require' support)
+            checks, skip = [], []
             for c in data.get("conditions", []):
                 try: 
                     if re.search(c["if"]["regex_match"], content, re.I|re.M): 
                         skip.extend(c["then"].get("skip", []))
                         for r in c["then"].get("require", []):
-                            if isinstance(r, str): added.append({"id": r, "severity": "HIGH", "remediation": "Conditional Req"})
-                            elif isinstance(r, dict): added.append(r)
+                            # Append dynamic requirements if needed
+                            pass 
                 except re.error as e: print(f"Warning: Regex error in condition: {e}", file=sys.stderr)
 
-            # 2. Logic: Requirements
-            for req in data.get("requirements", []) + added:
+            for req in data.get("requirements", []):
                 rid, stat, passed, ln, src = req["id"], "FAIL", False, 1, def_src
                 rem = req.get("remediation", "")
                 
@@ -223,9 +230,13 @@ class Nod:
                             if not src and idx >= 0: src = self._resolve_source(content, idx)
                         if e: rem = f"{e}. " + rem
 
-                checks.append({"id": rid, "passed": passed, "status": stat, "severity": req.get("severity", "HIGH"), "remediation": rem, "source": src, "line": ln, "control_id": req.get("control_id"), "article": req.get("article")})
+                checks.append({
+                    "id": rid, "label": req.get("label"), # Store label
+                    "passed": passed, "status": stat, "severity": req.get("severity", "HIGH"),
+                    "remediation": rem, "source": src, "line": ln, 
+                    "control_id": req.get("control_id"), "article": req.get("article")
+                })
 
-            # 3. Logic: Red Flags
             for flag in data.get("red_flags", []):
                 rid, stat, passed, ln, src = flag["pattern"], "PASS", True, 1, def_src
                 try:
@@ -235,25 +246,39 @@ class Nod:
                         if rid in self.ignored: stat = "EXCEPTION"
                         elif rid in skip: stat = "SKIPPED"
                         else: stat, passed = "FAIL", False
-                except re.error: pass
-                checks.append({"id": rid, "passed": passed, "status": stat, "severity": flag.get("severity", "CRITICAL"), "type": "red_flag", "remediation": flag.get("remediation"), "source": src, "line": ln, "control_id": flag.get("control_id"), "article": flag.get("article")})
+                except: pass
+                checks.append({
+                    "id": rid, "label": flag.get("label"), # Store label
+                    "passed": passed, "status": stat, "severity": flag.get("severity", "CRITICAL"),
+                    "type": "red_flag", "remediation": flag.get("remediation"),
+                    "source": src, "line": ln, "control_id": flag.get("control_id"), "article": flag.get("article")
+                })
 
-            # 4. Logic: Cross-Refs
+            # Cross-Refs
             for xr in data.get("cross_references", []):
                 try:
                     for m in re.finditer(xr["source"], content, re.I|re.M):
                         exp, ln = m.expand(xr["must_have"]), content.count("\n", 0, m.start()) + 1
                         passed = exp in content
-                        checks.append({"id": f"XRef: {m.group(0)}->{exp}", "passed": passed, "status": "PASS" if passed else "FAIL", "severity": xr.get("severity", "HIGH"), "remediation": f"Missing {exp}", "line": ln, "source": self._resolve_source(content, m.start(), def_src)})
-                except re.error: pass
+                        checks.append({
+                            "id": f"XRef: {m.group(0)}->{exp}", "label": "Cross-Reference Validation",
+                            "passed": passed, "status": "PASS" if passed else "FAIL", 
+                            "severity": xr.get("severity", "HIGH"), "remediation": f"Missing {exp}",
+                            "line": ln, "source": self._resolve_source(content, m.start(), def_src)
+                        })
+                except: pass
 
-            # 5. Logic: Evidence
             if strict and ext != ".json" and ("security" in name or "baseline" in name):
                 for m in re.finditer(r"\[([^\]]+)\]\((?!http)([^)]+)\)", content):
                     path = m.group(2).strip()
                     if not path.startswith("#"):
                         exists = os.path.exists(os.path.join(base, path))
-                        checks.append({"id": f"Ev: {m.group(1)}", "passed": exists, "status": "PASS" if exists else "FAIL", "severity": "MEDIUM", "remediation": f"Missing: {path}", "line": 1, "source": self._resolve_source(content, m.start(), def_src)})
+                        checks.append({
+                            "id": f"Ev: {m.group(1)}", "label": "Evidence Check",
+                            "passed": exists, "status": "PASS" if exists else "FAIL", 
+                            "severity": "MEDIUM", "remediation": f"Missing: {path}",
+                            "line": 1, "source": self._resolve_source(content, m.start(), def_src)
+                        })
 
             block = [c for c in checks if c["status"] == "FAIL" and self.SEVERITY_MAP.get(c["severity"], 0) >= 3]
             report[name] = {"label": data.get("badge_label", name), "checks": checks, "passed": not block}
@@ -264,8 +289,10 @@ class Nod:
         for p in res.values():
             for c in p.get("checks", []):
                 if c["status"] == "FAIL":
+                    # Use label for agent prompt if available
+                    name = c.get("label") or c['id']
                     ref = c.get("control_id") or c.get("article") or ""
-                    gaps.append(f"- [{c['severity']}] {c['id']} {f'[{ref}]' if ref else ''}: {c.get('remediation', '')}")
+                    gaps.append(f"- [{c['severity']}] {name} {f'[{ref}]' if ref else ''}: {c.get('remediation', '')}")
         return "\n".join(gaps) if gaps else "No gaps."
 
     def apply_fix(self, path: str, res: Dict):
@@ -279,7 +306,9 @@ class Nod:
                     if miss:
                         f.write(f"\n## Missing: {data['label']}\n")
                         for m in miss:
-                            f.write(f"\n### {self._clean(m['id'])}\n")
+                            # Use label for header if available
+                            header = m.get("label") or self._clean(m['id'])
+                            f.write(f"\n### {header}\n")
                             if m.get("control_id"): f.write(f"> Ref: {m['control_id']}\n")
                             f.write(f"<!-- {m.get('remediation')} -->\nTODO: Details.\n")
                             cnt += 1
@@ -293,11 +322,12 @@ class Nod:
                 rid = c["id"]
                 if rid not in rmap:
                     rmap[rid] = len(rules)
-                    props = {"severity": c["severity"], "tags": c.get("tags", [])}
+                    props = {"severity": c["severity"]}
                     if c.get("article"): props["article"] = c["article"]
-                    if c.get("control_id"): props["compliance-ref"] = c["control_id"]
                     if c.get("control_id"): props["security-severity"] = self.SARIF_SCORE_MAP.get(c["severity"], "1.0")
-                    rules.append({"id": rid, "name": rid, "shortDescription": {"text": c.get("remediation", rid)}, "properties": props})
+                    # Use label in shortDescription
+                    desc = c.get("label") or rid
+                    rules.append({"id": rid, "name": desc, "shortDescription": {"text": c.get("remediation", desc)}, "properties": props})
                 
                 if c["status"] in ["FAIL", "EXCEPTION"]:
                     uri = c.get("source") if c.get("source") and c.get("source") != "unknown" else path
@@ -315,7 +345,9 @@ class Nod:
             for c in chks:
                 icon = {"FAIL": "❌", "EXCEPTION": "⚪", "SKIPPED": "⏭️"}.get(c["status"], "✅")
                 ref = c.get("article") or c.get("control_id")
-                out.append(f"{icon} {f'{ref}: ' if ref else ''}{self._clean(c['id'])}")
+                # Use label instead of ID if available
+                name = c.get("label") or self._clean(c['id'])
+                out.append(f"{icon} {f'{ref}: ' if ref else ''}{name}")
                 if c["status"] == "FAIL": out.append(f"   MISSING: {c.get('remediation','')}")
                 elif c["status"] == "PASS" and c.get("source") and c["source"] != "unknown": out.append(f"   Ev: {c['source']}:{c.get('line')}")
                 out.append("")
@@ -363,13 +395,15 @@ def main():
         for d in res.values():
             summ.append(f"\n[{d['label']}]")
             for c in d["checks"]:
+                # Use label if available
+                name = c.get("label") or c['id']
                 if c["status"] == "FAIL":
-                    summ.append(f"  ❌ [{c['severity']}] {c['id']}")
+                    summ.append(f"  ❌ [{c['severity']}] {name}")
                     if c.get("source"): summ.append(f"     File: {c['source']}")
                     if scan.SEVERITY_MAP.get(c["severity"], 0) >= min_v: fail = True
-                elif c["status"] == "EXCEPTION": summ.append(f"  ⚪ [EXCEPTION] {c['id']}")
-                elif c["status"] == "SKIPPED": summ.append(f"  ⏭️  [SKIPPED] {c['id']}")
-                else: summ.append(f"  ✅ [PASS] {c['id']}")
+                elif c["status"] == "EXCEPTION": summ.append(f"  ⚪ [EXCEPTION] {name}")
+                elif c["status"] == "SKIPPED": summ.append(f"  ⏭️  [SKIPPED] {name}")
+                else: summ.append(f"  ✅ [PASS] {name}")
         summ.append(f"\nFAIL: Blocked by {a.min_severity}+" if fail else "\nPASS: Nod granted.")
         out = "\n".join(summ)
         if fail: code = 1

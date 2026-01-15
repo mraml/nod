@@ -5,7 +5,6 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     permissions:
-      # Required to upload SARIF results to the Security tab
       security-events: write
       contents: read
       
@@ -17,14 +16,14 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Install PyYAML
+      - name: Install dependencies
         run: pip install pyyaml
 
       - name: Run nod (Generate SARIF)
         id: nod_sarif
-        # Run in non-blocking mode first to generate the report
+        # Explicitly point to the defaults/ directory
         run: |
-          python nod.py ai-spec.md --output sarif > nod-results.sarif || true
+          python nod.py ai-spec.md --rules defaults/ --output sarif > nod-results.sarif || true
 
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v3
@@ -34,13 +33,13 @@ jobs:
       - name: Generate JSON Attestation
         if: always()
         run: |
-          python nod.py ai-spec.md --output json > nod-attestation.json || true
+          python nod.py ai-spec.md --rules defaults/ --output json > nod-attestation.json || true
 
       - name: Gatekeeper Check
         id: nod_gate
-        # Now fail the build if criteria aren't met
+        # Block the build if high severity issues are found
         run: |
-          python nod.py ai-spec.md --strict --min-severity HIGH
+          python nod.py ai-spec.md --rules defaults/ --strict --min-severity HIGH
 
       - name: Upload Attestation Artifact
         if: always()

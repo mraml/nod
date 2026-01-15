@@ -90,7 +90,6 @@ class Nod:
         for name, data in self.config.get("profiles", {}).items():
             lines.append(f"---\n## Profile: {data.get('badge_label', name)}\n")
             for req in data.get("requirements", []):
-                # Use label if available for clearer template
                 header = req.get("label") or self._clean(req['id'])
                 lines += [f"### {header}", f"<!-- {req.get('remediation', 'Fill section')} -->"]
                 if req.get("must_contain"): lines += ["<!-- Subsections: -->"] + req["must_contain"]
@@ -117,13 +116,19 @@ class Nod:
             lines.append("")
         return "\n".join(lines)
 
+    def _collect_files(self, path: str) -> List[str]:
+        if os.path.isfile(path): return [path]
+        found = []
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if not d.startswith('.')] # Filter hidden dirs
+            for f in files:
+                # Added .mdx to supported extensions
+                if os.path.splitext(f)[1].lower() in {'.md', '.markdown', '.mdx', '.json', '.txt'}:
+                    found.append(os.path.join(root, f))
+        return found
+
     def scan_input(self, path: str, strict: bool = False) -> Tuple[Dict, str]:
-        files = []
-        if os.path.isfile(path): files = [path]
-        else:
-            for root, dirs, fs in os.walk(path):
-                dirs[:] = [d for d in dirs if not d.startswith('.')] # Filter hidden dirs
-                files += [os.path.join(root, f) for f in fs if os.path.splitext(f)[1].lower() in {'.md', '.json', '.txt'}]
+        files = self._collect_files(path)
         
         if not files: return {"error": f"No files in {path}"}, "NONE"
         
@@ -231,7 +236,7 @@ class Nod:
                         if e: rem = f"{e}. " + rem
 
                 checks.append({
-                    "id": rid, "label": req.get("label"), # Store label
+                    "id": rid, "label": req.get("label"), 
                     "passed": passed, "status": stat, "severity": req.get("severity", "HIGH"),
                     "remediation": rem, "source": src, "line": ln, 
                     "control_id": req.get("control_id"), "article": req.get("article")
@@ -248,7 +253,7 @@ class Nod:
                         else: stat, passed = "FAIL", False
                 except: pass
                 checks.append({
-                    "id": rid, "label": flag.get("label"), # Store label
+                    "id": rid, "label": flag.get("label"),
                     "passed": passed, "status": stat, "severity": flag.get("severity", "CRITICAL"),
                     "type": "red_flag", "remediation": flag.get("remediation"),
                     "source": src, "line": ln, "control_id": flag.get("control_id"), "article": flag.get("article")
@@ -289,7 +294,6 @@ class Nod:
         for p in res.values():
             for c in p.get("checks", []):
                 if c["status"] == "FAIL":
-                    # Use label for agent prompt if available
                     name = c.get("label") or c['id']
                     ref = c.get("control_id") or c.get("article") or ""
                     gaps.append(f"- [{c['severity']}] {name} {f'[{ref}]' if ref else ''}: {c.get('remediation', '')}")
@@ -306,7 +310,6 @@ class Nod:
                     if miss:
                         f.write(f"\n## Missing: {data['label']}\n")
                         for m in miss:
-                            # Use label for header if available
                             header = m.get("label") or self._clean(m['id'])
                             f.write(f"\n### {header}\n")
                             if m.get("control_id"): f.write(f"> Ref: {m['control_id']}\n")
@@ -325,7 +328,6 @@ class Nod:
                     props = {"severity": c["severity"]}
                     if c.get("article"): props["article"] = c["article"]
                     if c.get("control_id"): props["security-severity"] = self.SARIF_SCORE_MAP.get(c["severity"], "1.0")
-                    # Use label in shortDescription
                     desc = c.get("label") or rid
                     rules.append({"id": rid, "name": desc, "shortDescription": {"text": c.get("remediation", desc)}, "properties": props})
                 
@@ -345,7 +347,6 @@ class Nod:
             for c in chks:
                 icon = {"FAIL": "❌", "EXCEPTION": "⚪", "SKIPPED": "⏭️"}.get(c["status"], "✅")
                 ref = c.get("article") or c.get("control_id")
-                # Use label instead of ID if available
                 name = c.get("label") or self._clean(c['id'])
                 out.append(f"{icon} {f'{ref}: ' if ref else ''}{name}")
                 if c["status"] == "FAIL": out.append(f"   MISSING: {c.get('remediation','')}")
@@ -395,7 +396,6 @@ def main():
         for d in res.values():
             summ.append(f"\n[{d['label']}]")
             for c in d["checks"]:
-                # Use label if available
                 name = c.get("label") or c['id']
                 if c["status"] == "FAIL":
                     summ.append(f"  ❌ [{c['severity']}] {name}")

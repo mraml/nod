@@ -24,7 +24,7 @@ jobs:
         id: nod_sarif
         # Run in non-blocking mode first to generate the report
         run: |
-          python nod.py ai-spec.md --rules rules.yaml --output sarif > nod-results.sarif || true
+          python nod.py ai-spec.md --output sarif > nod-results.sarif || true
 
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v3
@@ -35,7 +35,7 @@ jobs:
         id: nod_gate
         # Now fail the build if criteria aren't met
         run: |
-          python nod.py ai-spec.md --rules rules.yaml --strict --min-severity HIGH
+          python nod.py ai-spec.md --strict --min-severity HIGH
 
       - name: Upload Attestation Artifact
         if: always()

@@ -5,20 +5,10 @@ A platform-agnostic, rule-based linter that ensures AI/LLM specifications
 contain critical security and compliance elements before automated development.
 """
 
-import argparse
-import hashlib
-import hmac
-import json
-import os
-import re
-import ssl
-import sys
-import urllib.request
+import argparse, hashlib, hmac, json, os, re, ssl, sys, urllib.request
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
-
 import yaml
-
 
 class Colors:
     """ANSI color codes for terminal output."""
@@ -66,13 +56,16 @@ class Nod:
     DEFAULT_TIMEOUT = 15.0
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     MAX_TOTAL_SIZE = 20 * 1024 * 1024  # 20MB
+    
+    # Registry Constants
+    REGISTRY_BASE_URL = "https://raw.githubusercontent.com/mraml/nod-rules/main/library/"
 
     def __init__(self, rules_sources: List[str], ignore_path: str = ".nodignore") -> None:
         """
         Initialize the scanner.
 
         Args:
-            rules_sources: List of file paths or URLs to rule definitions.
+            rules_sources: List of file paths, URLs, or registry:IDs to rule definitions.
             ignore_path: Path to the ignore file.
         """
         self.config = self._load_rules(rules_sources)
@@ -81,7 +74,7 @@ class Nod:
         self.attestation: Dict[str, Any] = {}
 
     def _load_rules(self, sources: List[str]) -> Dict[str, Any]:
-        """Loads and merges rules from multiple sources (files/URLs/Dirs)."""
+        """Loads and merges rules from multiple sources (files/URLs/Dirs/Registry)."""
         merged = {"profiles": {}, "version": "combined"}
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = True
@@ -98,9 +91,20 @@ class Nod:
 
         for source in sources:
             try:
+                # 1. Handle Registry Shorthand (registry:name)
+                if source.startswith("registry:"):
+                    rule_name = source.split("registry:", 1)[1]
+                    if not rule_name.endswith((".yaml", ".yml")):
+                        rule_name += ".yaml"
+                    source = self.REGISTRY_BASE_URL + rule_name
+                    print(f"Fetching from registry: {source}")
+
+                # 2. Handle Remote URLs
                 if source.startswith(("http://", "https://")):
                     with urllib.request.urlopen(source, context=ssl_context, timeout=self.DEFAULT_TIMEOUT) as response:
                         merge(yaml.safe_load(response.read()))
+                
+                # 3. Handle Local Directories
                 elif os.path.isdir(source):
                     for filename in sorted(os.listdir(source)):
                         if filename.endswith(('.yaml', '.yml')):
@@ -110,12 +114,18 @@ class Nod:
                                 continue
                             with open(file_path, "r", encoding="utf-8") as f_in:
                                 merge(yaml.safe_load(f_in))
+                
+                # 4. Handle Local Files
                 elif os.path.exists(source):
                     if os.path.getsize(source) > self.MAX_FILE_SIZE:
                         print(f"Error: Rule file {source} too large", file=sys.stderr)
                         sys.exit(1)
                     with open(source, "r", encoding="utf-8") as f:
                         merge(yaml.safe_load(f))
+                else:
+                    print(f"Error: Rule source not found: {source}", file=sys.stderr)
+                    sys.exit(1)
+
             except Exception as e:
                 print(f"Error loading rules from {source}: {e}", file=sys.stderr)
                 sys.exit(1)
@@ -131,10 +141,6 @@ class Nod:
             except Exception:
                 pass
         return []
-
-    def _get_line_number(self, content: str, index: int) -> int:
-        """Calculates line number from character index."""
-        return content.count("\n", 0, index) + 1
 
     def _clean_header(self, text: str) -> str:
         """Normalizes regex patterns into readable headers."""
@@ -266,7 +272,7 @@ class Nod:
 
         self.attestation = {
             "tool": "nod",
-            "version": "1.8.0",
+            "version": "2.0.0",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "files_audited": files,
             "aggregate_hash": agg_hash,
@@ -667,6 +673,7 @@ def main():
     parser.add_argument("--save-to")
     args = parser.parse_args()
 
+    # NOTE: Default rules updated to prioritize registry if available or local defaults
     default_rules = ["defaults"] if os.path.isdir("defaults") else ["rules.yaml"]
     sources = args.rules if args.rules else default_rules
     scanner = Nod(sources)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nod-linter"
-version = "2.0.0"
+version = "2.1.0"
 description = "A compliance-as-code gatekeeper for AI specifications."
 readme = "README.md"
 authors = [
@@ -32,3 +32,6 @@ nod = "nod.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+nod = ["defaults/*.yaml"]

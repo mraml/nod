@@ -39,12 +39,12 @@ Automated agents and agentic workflows (like Ralph, AutoGPT, or custom CI/CD bui
 
 ## **🛠️ Installation**
 
-**nod** is a single-file Python tool. You can drop it directly into your repo or install it via your pipeline setup.
+**nod** can be installed as a Python package or used via GitHub Actions.
 
-**Requirements:** Python 3.10+, `PyYAML`
+**Local Installation:**
 
 ```
-pip install pyyaml
+pip install git+[https://github.com/mraml/nod.git@v2.0.0](https://github.com/mraml/nod.git@v2.0.0)
 ```
 
 ## **📖 Usage Lifecycle**
@@ -57,7 +57,7 @@ Don't know what headers strict compliance requires? Let `nod` build the skeleton
 
 ```
 # Generate a spec with all headers for EU AI Act, NIST, and OWASP
-python nod.py ai-spec.md --init --rules rules.yaml
+nod ai-spec.md --init --rules rules.yaml
 ```
 
 ### **2\. Build: Agentic Context Injection (`--export`)**
@@ -66,10 +66,10 @@ If you are using an AI Agent (like Ralph, Claude, or GPT) to write your spec or 
 
 ```
 # Export rules as a System Prompt constraint block
-python nod.py --export --rules rules.yaml
+nod --export --rules rules.yaml
 
 # Generate Cursor/Windsurf rules
-python nod.py --export cursor
+nod --export cursor
 ```
 
 ### **3\. Audit: The Gatekeeper**
@@ -78,10 +78,10 @@ Run the scan to verify the work. Use `--strict` to ensure headers aren't just em
 
 ```
 # Directory Mode (Scans all .md/.json files in /docs)
-python nod.py docs/ --strict --min-severity HIGH
+nod docs/ --strict --min-severity HIGH
 
 # Generate Manager Report
-python nod.py docs/ --output compliance
+nod docs/ --output compliance
 ```
 
 ### **4\. Maintain: Auto-Fix (`--fix`)**
@@ -89,7 +89,7 @@ python nod.py docs/ --output compliance
 Did you miss a new requirement? `nod` can append the missing sections for you.
 
 ```
-python nod.py docs/ --fix --rules rules.yaml
+nod docs/ --fix --rules rules.yaml
 ```
 
 ### **5\. Secure: Integrity Signing**
@@ -98,7 +98,7 @@ To verify that an audit result hasn't been tampered with, set the `NOD_SECRET_KE
 
 ```
 export NOD_SECRET_KEY="my-secret-ci-key"
-python nod.py ai-spec.md --output json
+nod ai-spec.md --output json
 # Output includes "signature": "a1b2c3..."
 ```
 
@@ -108,10 +108,10 @@ Lock your compliance state to detect drift.
 
 ```
 # Freeze current state to nod.lock
-python nod.py docs/ --freeze
+nod docs/ --freeze
 
 # Verify current state against lockfile (CI/CD)
-python nod.py docs/ --verify
+nod docs/ --verify
 ```
 
 ## **🧠 Advanced Rule Logic**
@@ -174,29 +174,29 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      
+      # Run nod using the Official Action
+      - name: Run nod Gatekeeper
+        uses: mraml/nod@v2.0.0
         with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: pip install pyyaml
-      - name: Run nod (Generate SARIF)
-        run: |
-          # Don't fail immediately, let SARIF upload happen first
-          python nod.py ai-spec.md --rules rules.yaml --output sarif > nod-results.sarif || true
+          target: 'docs/' 
+          rules: 'rules.yaml'
+          strict: 'true'
+          min_severity: 'HIGH'
+          output_format: 'sarif'
+          output_file: 'nod-results.sarif'
+
+      # Upload results to Security Tab
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: nod-results.sarif
-      - name: Gatekeeper Check
-        run: |
-          # Now fail the build if criteria aren't met
-          python nod.py ai-spec.md --rules rules.yaml --strict --min-severity HIGH
 ```
 
 ## **🤝 Contributing**
 
-We welcome contributions\! Please see [CONTRIBUTING.md](https://github.com/mraml/nod/blob/main/CONTRIBUTING.md) for details on how to add new rules or features.
+We welcome contributions\! Please see [CONTRIBUTING.md](https://www.google.com/search?q=CONTRIBUTING.md) for details on how to add new rules or features.
 
 If you find **nod** useful for your organization, please consider **starring the repository** to help others find it.
 
@@ -215,6 +215,8 @@ Add this to your `README.md` to show if your specs are currently passing the gat
 ## **🛡️ License**
 
 Apache 2.0
+
+
 
 
 

@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any, Tuple, List
 from .config import MAX_FILE_SIZE, MAX_TOTAL_SIZE
-from .utils import get_line_number, resolve_source
+from .utils import get_line_number, resolve_source, should_ignore
 from .reporters import generate_agent_prompt
 
 SEVERITY_MAP = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
@@ -22,10 +22,17 @@ class Scanner:
             return [path]
         found = []
         for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            # Performance Fix: Prune directory tree based on ignores
+            # Modify dirs in-place to prevent os.walk from entering them
+            dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), self.ignored_rules)]
+            
             for f in files:
+                fpath = os.path.join(root, f)
+                if should_ignore(fpath, self.ignored_rules):
+                    continue
+                    
                 if os.path.splitext(f)[1].lower() in {'.md', '.markdown', '.mdx', '.json', '.txt'}:
-                    found.append(os.path.join(root, f))
+                    found.append(fpath)
         return found
 
     def scan_input(self, path: str, strict: bool = False, version: str = "unknown") -> Tuple[Dict[str, Any], str]:
@@ -79,7 +86,7 @@ class Scanner:
 
         self.attestation = {
             "tool": "nod",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "policy_version": version,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "files_audited": files,
@@ -127,10 +134,12 @@ class Scanner:
                     
                     if passed:
                         if missing := [s for s in req.get("must_contain", []) if not re.search(re.escape(s), section, re.I)]:
-                            passed, err = False, f"Missing: {', '.join(missing)}"
+                            passed = False
+                            err = f"Missing: {', '.join(missing)}"
                         for p in req.get("must_match", []):
                             if p.get("pattern") and not re.search(p["pattern"], section, re.I | re.M):
-                                passed, err = False, p.get('message', 'Pattern mismatch')
+                                passed = False
+                                err = p.get('message', 'Pattern mismatch')
             except re.error: pass
         
         return passed, line, start_idx, err
@@ -157,23 +166,41 @@ class Scanner:
                 if rule_id in skip: status, passed = "SKIPPED", True
                 elif rule_id in self.ignored_rules: status, passed = "EXCEPTION", True
                 else:
-                    if req.get("mode") == "in_all_files" and fmap:
-                        missing_files = []
-                        for fp, txt in fmap.items():
-                            p_ok, _, _, _ = self._check_req(txt, os.path.splitext(fp)[1], req, strict)
-                            if not p_ok: missing_files.append(os.path.basename(fp))
-                        if missing_files:
-                            remediation = f"Missing in: {', '.join(missing_files)}. " + remediation
+                    mode = req.get("mode", "at_least_one")
+                    if mode == "in_all_files":
+                        # Check EVERY file individually
+                        missing = [os.path.basename(fp) for fp, txt in fmap.items() 
+                                   if not self._check_req(txt, os.path.splitext(fp)[1], req, strict)[0]]
+                        if missing: remediation = f"Missing in: {', '.join(missing)}. " + remediation
                         else: status, passed, src = "PASS", True, "all_files"
                     else:
-                        p_ok, ln, idx, err = self._check_req(content, ext, req, strict)
-                        if p_ok:
-                            status, passed, line = "PASS", True, ln
-                            if not src and idx >= 0: src = resolve_source(content, idx)
-                        if err: remediation = f"{err}. " + remediation
-
+                        # Logic Fix for Distributed JSON:
+                        # Instead of checking 'agg_content' which might be mangled JSON text,
+                        # iterate through the files in fmap and see if ANY satisfy the req.
+                        # This preserves 'at_least_one' logic without relying on text aggregation for JSON.
+                        any_pass = False
+                        
+                        # Optimization: Try the aggregate first for Markdown (fast), but iterate for JSON/Mixed
+                        if ext == ".md":
+                            p_ok, ln, idx, err = self._check_req(content, ext, req, strict)
+                            if p_ok:
+                                status, passed, line = "PASS", True, ln
+                                if not src and idx >= 0: src = resolve_source(content, idx)
+                                any_pass = True
+                            elif err: remediation = f"{err}. " + remediation
+                        
+                        # Fallback for JSON or if aggregate failed (double check individual files)
+                        if not any_pass:
+                            for fp, txt in fmap.items():
+                                p_ok, ln, _, _ = self._check_req(txt, os.path.splitext(fp)[1], req, strict)
+                                if p_ok:
+                                    status, passed, line, src = "PASS", True, ln, fp
+                                    any_pass = True
+                                    break
+                
                 checks.append({"id": rule_id, "label": req.get("label"), "passed": passed, "status": status, "severity": req.get("severity", "HIGH"), "remediation": remediation, "source": src, "line": line, "control_id": req.get("control_id"), "article": req.get("article")})
 
+            # ... (Red Flags & Cross Refs remain similar, using content for regex is safe for text scan) ...
             for flag in data.get("red_flags", []):
                 rule_id = flag["pattern"]
                 status, passed, line, src = "PASS", True, 1, def_src
@@ -188,13 +215,13 @@ class Scanner:
                 except re.error: pass
                 checks.append({"id": rule_id, "label": flag.get("label"), "passed": passed, "status": status, "severity": flag.get("severity", "CRITICAL"), "type": "red_flag", "remediation": flag.get("remediation"), "source": src, "line": line, "control_id": flag.get("control_id"), "article": flag.get("article")})
 
-            for xref in data.get("cross_references", []):
+            for xr in data.get("cross_references", []):
                 try:
-                    for match in re.finditer(xref["source"], content, re.I | re.M):
-                        expected = match.expand(xref["must_have"])
+                    for match in re.finditer(xr["source"], content, re.I | re.M):
+                        expected = match.expand(xr["must_have"])
                         line = get_line_number(content, match.start())
                         passed = expected in content
-                        checks.append({"id": f"XRef: {match.group(0)}->{expected}", "label": "Cross-Reference Validation", "passed": passed, "status": "PASS" if passed else "FAIL", "severity": xref.get("severity", "HIGH"), "remediation": f"Missing {expected}", "line": line, "source": resolve_source(content, match.start(), def_src)})
+                        checks.append({"id": f"XRef: {match.group(0)}->{expected}", "label": "Cross-Reference Validation", "passed": passed, "status": "PASS" if passed else "FAIL", "severity": xr.get("severity", "HIGH"), "remediation": f"Missing {expected}", "line": line, "source": resolve_source(content, match.start(), def_src)})
                 except re.error: pass
 
             if strict and ext != ".json" and ("security" in name or "baseline" in name):

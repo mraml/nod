@@ -22,7 +22,7 @@ inputs:
     required: false
     default: 'HIGH'
   output_format:
-    description: 'Output format (text, json, sarif)'
+    description: 'Output format (text, json, sarif, compliance)'
     required: false
     default: 'text'
   output_file:
@@ -38,13 +38,16 @@ runs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
-      run: pip install pyyaml
+    - name: Install nod
+      run: pip install ${{ github.action_path }}
       shell: bash
 
     - name: Run nod
       run: |
+        # Logic: User Input -> defaults/ -> rules.yaml
         RULES="${{ inputs.rules }}"
+        
+        # We need to look inside the action path for defaults if not provided
         if [ -z "$RULES" ]; then
           if [ -d "${{ github.action_path }}/defaults" ]; then
             RULES="${{ github.action_path }}/defaults"
@@ -58,7 +61,10 @@ runs:
           SAVE_ARG="--save-to ${{ inputs.output_file }}"
         fi
 
-        python ${{ github.action_path }}/nod.py ${{ inputs.target }} \
+        echo "Running nod on ${{ inputs.target }} with rules from $RULES"
+
+        # Now we call 'nod' directly as a CLI command
+        nod ${{ inputs.target }} \
           --rules "$RULES" \
           --min-severity ${{ inputs.min_severity }} \
           --output ${{ inputs.output_format }} \

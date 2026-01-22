@@ -1,49 +1,101 @@
+# nod Compliance Pack: Security Baseline
+# Version: 1.2 (Hardened Regex for v2.1.0)
+# Focus: Foundational cybersecurity hygiene for any AI project.
+
 profiles:
   security_baseline:
     badge_label: "Security Hardened"
+    
     requirements:
-      - id: "Data Retention Policy"
+      # Data Protection
+      - id: "#+.*Data Retention"
+        label: "Data Retention Policy"
         tags: ["Privacy", "Data-Protection"]
         severity: "MEDIUM"
         remediation: "Define how long training inputs and inference outputs are stored."
-      - id: "Encryption at Rest"
-        tags: ["Security", "Encryption", "Storage"]
+
+      - id: "#+.*Encryption at Rest"
+        label: "Encryption (Rest)"
+        control_id: "SC-28"
+        tags: ["Security", "Storage"]
         severity: "HIGH"
         remediation: "Must explicitly state encryption protocols for stored data (e.g., AES-256)."
-      - id: "Encryption in Transit"
-        tags: ["Security", "Encryption", "Network"]
+
+      - id: "#+.*Encryption in Transit"
+        label: "Encryption (Transit)"
+        control_id: "SC-8"
+        tags: ["Security", "Network"]
         severity: "HIGH"
         remediation: "Must explicitly state encryption protocols for data in motion (e.g., TLS 1.3)."
-      - id: "Authentication Mechanisms"
+
+      # Identity & Access Management (IAM)
+      - id: "#+.*Authentication"
+        label: "Authentication"
         control_id: "AC-1"
         severity: "HIGH"
         remediation: "Define how users/systems are authenticated (e.g., MFA, SSO)."
-      - id: "Authorization Policy"
+
+      - id: "#+.*Authorization"
+        label: "Authorization"
         control_id: "AC-2"
         severity: "HIGH"
         remediation: "Define permission models (e.g., RBAC, Least Privilege)."
-      - id: "Secrets Management"
-        tags: ["Security", "Secrets"]
+
+      - id: "#+.*Secrets Management"
+        label: "Secrets Management"
+        control_id: "IA-5"
         severity: "CRITICAL"
         remediation: "Define how secrets (API keys) are managed, ensuring they are not hardcoded."
-      - id: "Audit Logging"
+
+      # Logging & Availability
+      - id: "#+.*Audit Log"
+        label: "Audit Logging"
         control_id: "AU-2"
         severity: "HIGH"
         remediation: "Ensure security-critical events (login failures, sensitive access) are logged centrally."
-      - id: "Rate Limiting"
-        tags: ["Security", "Availability"]
+
+      - id: "#+.*Rate Limit"
+        label: "Rate Limiting"
+        control_id: "SC-5"
         severity: "MEDIUM"
         remediation: "Define rate limits to prevent DoS attacks."
-      - id: "Energy Consumption"
+
+      # Sustainability
+      - id: "#+.*Energy Consumption"
+        label: "Sustainability"
         tags: ["Sustainability", "Green-AI"]
         severity: "LOW"
         remediation: "Sustainability: Estimate energy consumption of training/inference."
+
     red_flags:
+      # Credential Leakage (High Fidelity)
+      - pattern: "(?i)(password|secret|key|token)\\s*=\\s*['\"][a-zA-Z0-9_\\-]{8,}['\"]"
+        label: "Generic Secret Assignment"
+        tags: ["Security", "Secrets"]
+        severity: "CRITICAL"
+        remediation: "Potential hardcoded secret detected. Use environment variables or a vault."
+
+      - pattern: "(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}"
+        label: "AWS Access Key"
+        tags: ["Security", "Secrets"]
+        severity: "CRITICAL"
+        remediation: "AWS Access Key ID detected. Revoke immediately."
+
+      - pattern: "-----BEGIN (RSA|EC|DSA|OPENSSH|PRIVATE)? ?KEY-----"
+        label: "Private Key Block"
+        tags: ["Security", "Secrets"]
+        severity: "CRITICAL"
+        remediation: "Private Key block detected. Never commit keys to version control."
+
+      - pattern: "sk-[a-zA-Z0-9]{32,}"
+        label: "OpenAI Key"
+        tags: ["Security", "Secrets"]
+        severity: "CRITICAL"
+        remediation: "OpenAI Secret Key detected."
+
+      # Anti-Patterns
       - pattern: "disable auth"
+        label: "Disabled Auth"
         tags: ["Security", "Anti-Pattern"]
         severity: "CRITICAL"
         remediation: "Security Anti-Pattern: Do not disable authentication mechanisms in spec."
-      - pattern: "hardcoded credential"
-        tags: ["Security", "Anti-Pattern"]
-        severity: "CRITICAL"
-        remediation: "Security Anti-Pattern: Never reference hardcoded secrets or keys."

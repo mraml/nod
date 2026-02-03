@@ -18,6 +18,9 @@ Automated agents and agentic workflows (like Ralph, AutoGPT, or custom CI/CD bui
 
 * **Directory Scanning:** Scan a single file OR an entire folder of specs (Distributed Compliance).  
 * **Compliance Reporting:** Generate executive summaries (`--output compliance`) with % completion metrics.  
+* **Code-to-Spec Verification (Drift Detection):** 🆕  
+  * **Reality Checks:** Verify if claims in the Spec (e.g., "Database: Postgres") actually exist in the code (e.g., `requirements.txt`).  
+  * **Drift Reporting:** Flag contradictions between documentation and implementation files.  
 * **Deep Validation:**  
   * **Field Patterns:** Validate specific values (e.g., "Retention: 30 days") using regex.  
   * **Structure:** Ensure sections contain specific subsections (`must_contain`).  
@@ -31,7 +34,7 @@ Automated agents and agentic workflows (like Ralph, AutoGPT, or custom CI/CD bui
 * **Gap Severity Model:** Categorizes issues as **CRITICAL**, **HIGH**, **MEDIUM**, or **LOW**.  
 * **SARIF Output:** Native integration with GitHub Advanced Security and GitLab Security Dashboards.  
 * **Exception Management:** Formalize risk acceptance using a `.nodignore` file.  
-* **Remote Rule Registry:** Securely fetch industry-standard rules via HTTPS with strict SSL verification.
+* **Remote Rule Registry:** Securely fetch industry-standard rules via HTTPS with strict SSL verification.  
 * **Community Rules Library:** https://github.com/mraml/nod-rules
 
 ## **⚠️ Important Disclaimer**
@@ -53,6 +56,7 @@ Don't know what headers strict compliance requires? Let `nod` build the skeleton
 ```
 # Generate a spec with all headers for EU AI Act, NIST, and OWASP
 nod ai-spec.md --init --rules rules.yaml
+
 ```
 
 ### **2\. Build: Agentic Context Injection (`--export`)**
@@ -65,6 +69,7 @@ nod --export --rules rules.yaml
 
 # Generate Cursor/Windsurf rules
 nod --export cursor
+
 ```
 
 ### **3\. Audit: The Gatekeeper**
@@ -77,6 +82,7 @@ nod docs/ --strict --min-severity HIGH
 
 # Generate Manager Report
 nod docs/ --output compliance
+
 ```
 
 ### **4\. Maintain: Auto-Fix (`--fix`)**
@@ -85,6 +91,7 @@ Did you miss a new requirement? `nod` can append the missing sections for you.
 
 ```
 nod docs/ --fix --rules rules.yaml
+
 ```
 
 ### **5\. Secure: Integrity Signing**
@@ -95,6 +102,7 @@ To verify that an audit result hasn't been tampered with, set the `NOD_SECRET_KE
 export NOD_SECRET_KEY="my-secret-ci-key"
 nod ai-spec.md --output json
 # Output includes "signature": "a1b2c3..."
+
 ```
 
 ### **6\. Baseline: Freeze & Verify**
@@ -107,11 +115,54 @@ nod docs/ --freeze
 
 # Verify current state against lockfile (CI/CD)
 nod docs/ --verify
+
+```
+
+## **💡 CLI Power Tips**
+
+* **Registry Shorthand:** Skip manually downloading files. Use `registry:name` to fetch from the official library.
+
+```
+nod docs/ --rules registry:owasp-llm
+```
+
+*   
+  **Silent Mode (`-q`):** Suppress banner art and success messages. Perfect for clean CI logs.
+
+```
+nod docs/ -q --strict
+```
+
+*   
+  **File Output (`--save-to`):** Save reports directly to a file without piping.
+
+```
+nod docs/ --output sarif --save-to report.sarif
 ```
 
 ## **🧠 Advanced Rule Logic**
 
 **nod** supports sophisticated rule definitions in `rules.yaml` to handle complex compliance scenarios.
+
+### **Reality Checks (Drift Detection)**
+
+Ensure that what is written in the Spec actually exists in the Code.
+
+```
+reality_checks:
+  # Check if the DB defined in Spec matches requirements.txt
+  - spec_pattern: "Database:\\s*(\\w+)"     # Captures 'Postgres'
+    target_file: "requirements.txt"          # Scans this file
+    reality_pattern: "(?i)\\1"               # Looks for 'Postgres' (case-insensitive)
+    severity: "HIGH"
+
+  # Check if Isolation claims match Dockerfile
+  - spec_pattern: "Isolation:\\s*(\\w+)"     # Captures 'Alpine'
+    target_file: "Dockerfile"
+    reality_pattern: "(?i)FROM.*\\1"         # Looks for 'FROM ... Alpine'
+    severity: "CRITICAL"
+
+```
 
 ### **Enforcement Modes**
 
@@ -121,6 +172,7 @@ Control *where* a requirement must appear.
 - id: "## Data Privacy"
   mode: "in_all_files"  # Must exist in EVERY file scanned (e.g., footer policy)
   # Default mode is "at_least_one" (Distributed compliance)
+
 ```
 
 ### **Field Validation**
@@ -132,6 +184,7 @@ Go beyond headers. Check for specific content patterns.
   must_match:
     - pattern: "Retention Period: \d+ (days|years)"
       message: "Must specify numeric retention period"
+
 ```
 
 ### **Cross-Reference Validation**
@@ -142,6 +195,7 @@ Ensure traceabilty between documents (e.g., Threats must have Controls).
 cross_references:
   - source: "Threat T-(\d+)"
     must_have: "Control C-\1"
+
 ```
 
 ## **⚙️ Configuration (`rules.yaml`)**
@@ -172,7 +226,7 @@ jobs:
       
       # Run nod using the Official Action
       - name: Run nod Gatekeeper
-        uses: mraml/nod@v2.0.0
+        uses: mraml/nod@v2.1.0
         with:
           target: 'docs/' 
           rules: 'rules.yaml'
@@ -187,11 +241,12 @@ jobs:
         if: always()
         with:
           sarif_file: nod-results.sarif
+
 ```
 
 ## **🤝 Contributing**
 
-We welcome contributions\! Please see [CONTRIBUTING.md](https://github.com/mraml/nod/blob/main/CONTRIBUTING.md) for details on how to add new rules or features.
+We welcome contributions\! Please see [CONTRIBUTING.md](https://www.google.com/search?q=CONTRIBUTING.md) for details on how to add new rules or features.
 
 If you find **nod** useful for your organization, please consider **starring the repository** to help others find it.
 
@@ -201,6 +256,7 @@ Add this to your `README.md` to show if your specs are currently passing the gat
 
 ```
 ![Nod Gatekeeper](https://github.com/<username>/<repo>/actions/workflows/nod-gatekeeper.yml/badge.svg)
+
 ```
 
 ## **🤖 Transparency**
@@ -210,6 +266,8 @@ Add this to your `README.md` to show if your specs are currently passing the gat
 ## **🛡️ License**
 
 Apache 2.0
+
+
 
 
 

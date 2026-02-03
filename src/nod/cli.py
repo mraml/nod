@@ -4,7 +4,7 @@ import os
 import json
 from .config import load_rules, load_ignore
 from .scanner import Scanner, SEVERITY_MAP
-from .generator import gen_template, gen_context, apply_fix
+from .generator import gen_template, gen_context, gen_schema, apply_fix
 from .reporters import gen_sarif, gen_report
 from .security import sign_attestation, freeze, verify
 from .utils import Colors, colorize
@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--init", action="store_true")
     parser.add_argument("--fix", action="store_true")
     parser.add_argument("--export", nargs="?", const="context", choices=["context", "cursor", "windsurf"], help="Export context/rules")
+    parser.add_argument("--export-schema", action="store_true", help="Export active rules as JSON Schema")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--freeze", action="store_true")
     parser.add_argument("--verify", action="store_true")
@@ -34,6 +35,10 @@ def main():
     config = load_rules(sources)
     policy_version = config.get("version", "unknown")
     ignored = load_ignore(".nodignore")
+
+    if args.export_schema:
+        print(gen_schema(config, policy_version))
+        sys.exit(0)
 
     if args.export:
         print(gen_context(config, policy_version, ignored, args.export))
@@ -101,8 +106,6 @@ def main():
         min_val = SEVERITY_MAP.get(args.min_severity, 0)
         
         for data in results.values():
-            # In quiet mode, skip profile headers unless there's a failure inside? 
-            # Or just print failures. Let's print failures only in quiet mode.
             profile_buffer = []
             if not args.quiet:
                 profile_buffer.append(f"\n[{colorize(data['label'], Colors.BOLD)}]")
@@ -127,7 +130,6 @@ def main():
                     else:
                         profile_buffer.append(f"  {colorize('✅', Colors.GREEN)} [PASS] {name}")
             
-            # In quiet mode, only append buffer if there were failures
             if not args.quiet or has_failures:
                 summary.extend(profile_buffer)
         
@@ -141,7 +143,6 @@ def main():
             
         output_content = "\n".join(summary)
 
-    # Check exit code based on severity for non-text outputs too
     if SEVERITY_MAP.get(max_sev_label, 0) >= SEVERITY_MAP.get(args.min_severity, 0):
         exit_code = 1
 
@@ -155,7 +156,6 @@ def main():
             print(f"Error saving file: {e}", file=sys.stderr)
             sys.exit(1)
     else:
-        # Only print if there is content (quiet mode with no errors might be empty)
         if output_content.strip():
             print(output_content)
     

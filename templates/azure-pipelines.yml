@@ -1,0 +1,27 @@
+# nod Compliance Gatekeeper for Azure DevOps
+# Usage: Add this as a step in your pipeline job
+
+jobs:
+- job: ComplianceAudit
+  displayName: 'nod Compliance Check'
+  pool:
+    vmImage: 'ubuntu-latest'
+  
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.10'
+      addToPath: true
+
+  - script: |
+      pip install nod-linter
+      nod . --strict --min-severity HIGH --output sarif --save-to nod-results.sarif
+    displayName: 'Run nod Gatekeeper'
+
+  # Publish SARIF for Azure Advanced Security (if enabled)
+  - task: PublishBuildArtifacts@1
+    condition: always()
+    inputs:
+      PathtoPublish: 'nod-results.sarif'
+      ArtifactName: 'CodeAnalysisLogs'
+      publishLocation: 'Container'

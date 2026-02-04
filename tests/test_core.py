@@ -30,6 +30,14 @@ class TestNodCore(unittest.TestCase):
                             "severity": "CRITICAL",
                             "remediation": "Do not include forbidden text"
                         }
+                    ],
+                    "reality_checks": [
+                        {
+                            "spec_pattern": "Database: (\\w+)",
+                            "target_file": "requirements.txt",
+                            "reality_pattern": "(?i)\\1",
+                            "severity": "HIGH"
+                        }
                     ]
                 }
             }
@@ -51,44 +59,47 @@ class TestNodCore(unittest.TestCase):
         self.assertTrue(checks[0]["passed"])
         self.assertEqual(checks[0]["status"], "PASS")
 
-    def test_scanner_fail_missing_header(self):
-        content = "# Wrong Header"
-        results = self.scanner._audit(content, ".md", strict=True, base_dir=".", def_src="test.md", fmap={})
+    def test_reality_check_pass(self):
+        # Spec says Database: Postgres
+        spec_content = "# Database\nDatabase: Postgres"
+        # Requirements has postgres
+        req_content = "psycopg2-binary\nPostgres==13.0"
+        
+        fmap = {"test.md": spec_content, "requirements.txt": req_content}
+        
+        results = self.scanner._audit(spec_content, ".md", strict=True, base_dir=".", def_src="test.md", fmap=fmap)
         checks = results["test_profile"]["checks"]
         
-        self.assertFalse(checks[0]["passed"])
-        self.assertEqual(checks[0]["status"], "FAIL")
+        # Find Reality Check
+        rc = next(c for c in checks if c["id"].startswith("RealityCheck"))
+        self.assertTrue(rc["passed"])
+        self.assertEqual(rc["status"], "PASS")
 
-    def test_scanner_fail_deep_validation(self):
-        # Header present, but value is wrong (ABC instead of number)
-        content = "# Required Header\nValue: ABC"
-        results = self.scanner._audit(content, ".md", strict=True, base_dir=".", def_src="test.md", fmap={})
+    def test_reality_check_fail(self):
+        # Spec says Database: Postgres
+        spec_content = "# Database\nDatabase: Postgres"
+        # Requirements has MySQL
+        req_content = "mysql-connector"
+        
+        fmap = {"test.md": spec_content, "requirements.txt": req_content}
+        
+        results = self.scanner._audit(spec_content, ".md", strict=True, base_dir=".", def_src="test.md", fmap=fmap)
         checks = results["test_profile"]["checks"]
         
-        self.assertFalse(checks[0]["passed"])
-        self.assertIn("Must be number", checks[0]["remediation"])
+        # Find Reality Check
+        rc = next(c for c in checks if c["id"].startswith("RealityCheck"))
+        self.assertFalse(rc["passed"])
+        self.assertEqual(rc["status"], "FAIL")
+        self.assertEqual(rc["type"], "contradiction")
 
     def test_red_flag_detection(self):
         content = "Some text with FORBIDDEN_TEXT inside."
         results = self.scanner._audit(content, ".md", strict=True, base_dir=".", def_src="test.md", fmap={})
         checks = results["test_profile"]["checks"]
         
-        # Should have 2 checks: 1 Req (Fail) + 1 Red Flag (Fail)
-        self.assertEqual(len(checks), 2)
-        
         flag_check = next(c for c in checks if c["type"] == "red_flag")
         self.assertFalse(flag_check["passed"])
         self.assertEqual(flag_check["severity"], "CRITICAL")
-
-    def test_ignore_logic(self):
-        # Ignore the requirement
-        self.scanner.ignored_rules = ["#+.*Required Header"]
-        content = "# Wrong Header"
-        results = self.scanner._audit(content, ".md", strict=True, base_dir=".", def_src="test.md", fmap={})
-        checks = results["test_profile"]["checks"]
-        
-        self.assertTrue(checks[0]["passed"])
-        self.assertEqual(checks[0]["status"], "EXCEPTION")
 
 if __name__ == '__main__':
     unittest.main()

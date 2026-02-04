@@ -39,6 +39,8 @@ def gen_sarif(attestation: Dict[str, Any], path: str) -> Dict[str, Any]:
                 if c.get("control_id"):
                     props["compliance-ref"] = c["control_id"]
                     props["security-severity"] = SARIF_SCORE_MAP.get(c["severity"], "1.0")
+                if c.get("type") == "contradiction":
+                    props["tags"] = ["drift", "spec-contradiction"]
                 
                 desc = c.get("label") or rule_id
                 rules.append({
@@ -82,11 +84,19 @@ def gen_sarif(attestation: Dict[str, Any], path: str) -> Dict[str, Any]:
 def gen_report(attestation: Dict[str, Any]) -> str:
     """Generates a human-readable text report."""
     out = []
+    contradictions = []
+
     for data in attestation["results"].values():
         chks = data.get("checks", [])
         pct = int((len([c for c in chks if c["status"] != "FAIL"]) / len(chks) * 100) if chks else 0)
         out.append(f"{data['label']} Report ({datetime.utcnow().strftime('%Y-%m-%d')})\nStatus: {pct}% Compliant\n")
+        
         for c in chks:
+            # Separate Contradictions/Drift for special section
+            if c.get("type") == "contradiction" and c["status"] == "FAIL":
+                contradictions.append(f"⚠️  {c['remediation']} (Line {c.get('line')} in {c.get('source')})")
+                continue
+
             icon = {"FAIL": "❌", "EXCEPTION": "⚪", "SKIPPED": "⏭️"}.get(c["status"], "✅")
             ref = c.get("article") or c.get("control_id")
             name = c.get("label") or clean_header(c['id'])
@@ -98,4 +108,13 @@ def gen_report(attestation: Dict[str, Any]) -> str:
                 out.append(f"   Ev: {c['source']}:{c.get('line')}")
             out.append("")
         out.append("-" * 40)
+    
+    # Append Drift Report if contradictions found
+    if contradictions:
+        out.append("\n" + "="*40)
+        out.append("📊 POTENTIAL CODE CONTRADICTIONS (DRIFT)")
+        out.append("="*40)
+        out.extend(contradictions)
+        out.append("")
+
     return "\n".join(out)

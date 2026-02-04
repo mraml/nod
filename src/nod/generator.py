@@ -1,4 +1,5 @@
 import sys
+import json
 from typing import Dict, Any
 from .utils import clean_header
 
@@ -48,6 +49,41 @@ def gen_context(config: Dict[str, Any], policy_version: str, ignored: list, fmt:
         lines.append("")
         
     return "\n".join(lines)
+
+def gen_schema(config: Dict[str, Any], policy_version: str) -> str:
+    """Generates a JSON Schema representation of the active policy."""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "nod Compliance Policy",
+        "version": policy_version,
+        "description": "Active compliance rules loaded by nod.",
+        "type": "object",
+        "properties": {
+            "profiles": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    }
+
+    for name, data in config.get("profiles", {}).items():
+        profile_schema = {
+            "type": "object",
+            "description": data.get('badge_label', name),
+            "properties": {
+                "requirements": {"type": "array", "items": {"type": "string"}},
+                "red_flags": {"type": "array", "items": {"type": "string"}}
+            }
+        }
+        
+        # Populate specific requirements as enums/examples
+        reqs = [r.get("label") or clean_header(r['id']) for r in data.get("requirements", [])]
+        if reqs:
+            profile_schema["properties"]["requirements"]["examples"] = reqs
+            
+        schema["properties"]["profiles"]["properties"][name] = profile_schema
+
+    return json.dumps(schema, indent=2)
 
 def apply_fix(path: str, results: Dict[str, Any]) -> None:
     """Appends missing sections to the target file."""

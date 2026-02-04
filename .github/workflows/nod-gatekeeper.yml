@@ -11,8 +11,8 @@ permissions:
   security-events: write
 
 jobs:
-  # FIX: Renamed from 'quality-gate' to 'audit' to match main branch configuration
-  audit:
+  # FIX: Renamed back to 'quality-gate' to match the history on 'main'
+  quality-gate:
     name: Transparency Standard Check
     runs-on: ubuntu-latest
     steps:

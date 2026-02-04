@@ -1,0 +1,23 @@
+# nod Compliance Gatekeeper for GitLab CI
+# Usage: Copy this file to your repo root or include it in your existing .gitlab-ci.yml
+
+stages:
+  - compliance
+
+nod_check:
+  stage: compliance
+  image: python:3.10-slim
+  script:
+    - pip install nod-linter
+    # Scan the current directory
+    - nod . --strict --min-severity HIGH --output sarif --save-to nod-results.sarif
+  artifacts:
+    when: always
+    reports:
+      # Allows GitLab Ultimate users to see results in the Vulnerability Report
+      sast: nod-results.sarif
+    paths:
+      - nod-results.sarif
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
